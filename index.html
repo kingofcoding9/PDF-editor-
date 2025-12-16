@@ -27,10 +27,11 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <!-- 3. PDF Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Switched to jsdelivr/pdfjs-dist to fix Worker CORS issues -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script>
         // Set Worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
     </script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 
@@ -44,14 +45,25 @@
         .overlay-element.selected { outline: 2px solid #06b6d4; outline-offset: 2px; }
         .overlay-element:hover { outline: 1px solid #67e8f9; }
         
-        /* Delete Button */
-        .delete-btn { 
-            position: absolute; top: -12px; right: -12px; 
-            background: #ef4444; color: white; border-radius: 50%; 
-            width: 20px; height: 20px; display: none; 
-            align-items: center; justify-content: center; cursor: pointer; z-index: 50;
+        /* Properties Toolbar (Floating above element) */
+        .props-bar {
+            position: absolute; bottom: 100%; left: 0; 
+            margin-bottom: 8px; display: none;
+            background: #1e293b; border: 1px solid #334155;
+            border-radius: 6px; padding: 4px;
+            gap: 4px; align-items: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);
+            z-index: 100; white-space: nowrap;
         }
-        .overlay-element.selected .delete-btn { display: flex; }
+        .overlay-element.selected .props-bar { display: flex; }
+        
+        /* Resize Handle */
+        .resize-handle {
+            position: absolute; bottom: -6px; right: -6px;
+            width: 12px; height: 12px; background: #06b6d4;
+            border: 2px solid #fff; border-radius: 50%;
+            cursor: se-resize; display: none; z-index: 50;
+        }
+        .overlay-element.selected .resize-handle { display: block; }
 
         /* Text Area transparency */
         textarea.pdf-input { 
@@ -63,6 +75,13 @@
         /* Modal Animation */
         .modal { transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
         .modal.active { opacity: 1; pointer-events: auto; }
+        
+        /* Color Input Reset */
+        input[type="color"] {
+            -webkit-appearance: none; border: none; width: 24px; height: 24px; cursor: pointer; padding: 0; background: none;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #475569; border-radius: 4px; }
     </style>
 </head>
 <body class="flex flex-col h-screen">
@@ -110,7 +129,7 @@
                 <button onclick="addText()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Add Text">
                     <i data-lucide="type" width="18"></i>
                 </button>
-                <button onclick="addRect()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Whiteout">
+                <button onclick="addRect()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Whiteout (Rect)">
                     <i data-lucide="square" width="18"></i>
                 </button>
                 <button onclick="document.getElementById('image-input').click()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Add Image">
@@ -193,58 +212,43 @@
         let scale = 1.0;
         let canvas = document.getElementById('the-canvas');
         let ctx = canvas.getContext('2d');
-        let pdfBytes = null; // Store raw bytes for saving
+        let pdfBytes = null; 
 
         // Overlay Elements State
-        // Structure: { id, type, x, y, width, height, content, page, fontSize }
+        // Structure: { id, type, x, y, width, height, content, page, fontSize, color, originalContent }
         let elements = [];
         let selectedElementId = null;
-        let activeTool = 'select'; // select, text, rect, image, signature
+        let activeTool = 'select';
 
         // --- PDF Rendering ---
         function renderPage(num) {
             pageRendering = true;
-            
-            // Fetch page
             pdfDoc.getPage(num).then(function(page) {
                 let viewport = page.getViewport({scale: scale});
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
 
-                // Resize wrapper to match canvas
                 document.getElementById('pdf-wrapper').style.width = viewport.width + 'px';
                 document.getElementById('pdf-wrapper').style.height = viewport.height + 'px';
 
-                let renderContext = {
-                    canvasContext: ctx,
-                    viewport: viewport
-                };
+                let renderContext = { canvasContext: ctx, viewport: viewport };
                 let renderTask = page.render(renderContext);
 
-                // Wait for render to finish
                 renderTask.promise.then(function() {
                     pageRendering = false;
-                    
-                    // Render Overlays for this page
                     renderOverlays();
-
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
                         pageNumPending = null;
                     }
                 });
             });
-
-            // Update page counters
             document.getElementById('page-num').textContent = num;
         }
 
         function queueRenderPage(num) {
-            if (pageRendering) {
-                pageNumPending = num;
-            } else {
-                renderPage(num);
-            }
+            if (pageRendering) pageNumPending = num;
+            else renderPage(num);
         }
 
         function changePage(offset) {
@@ -267,20 +271,13 @@
         document.getElementById('file-input').addEventListener('change', async function(e) {
             let file = e.target.files[0];
             if(file.type !== 'application/pdf') return;
-
-            // Read file
             let arrayBuffer = await file.arrayBuffer();
-            pdfBytes = arrayBuffer; // Save for later
-
-            // Load PDF
+            pdfBytes = arrayBuffer;
             pdfjsLib.getDocument(arrayBuffer).promise.then(function(pdfDoc_) {
                 pdfDoc = pdfDoc_;
                 document.getElementById('page-count').textContent = pdfDoc.numPages;
-                
-                // Show UI, Hide Upload
                 document.getElementById('upload-screen').classList.add('hidden');
                 document.getElementById('app-interface').classList.remove('hidden');
-                
                 renderPage(pageNum);
             });
         });
@@ -292,7 +289,6 @@
                 reader.onload = function(event){
                     let img = new Image();
                     img.onload = function(){
-                        // Calc Aspect Ratio
                         let ar = img.width / img.height;
                         let w = 150;
                         let h = 150 / ar;
@@ -302,9 +298,30 @@
                 }
                 reader.readAsDataURL(file);
             }
-            // Reset
             e.target.value = '';
         });
+
+        // --- Helper: Color Tinting for Signatures ---
+        function colorizeImage(dataUrl, color) {
+            return new Promise((resolve) => {
+                let img = new Image();
+                img.onload = () => {
+                    let c = document.createElement('canvas');
+                    c.width = img.width;
+                    c.height = img.height;
+                    let ctx = c.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Composite operation to tint non-transparent pixels
+                    ctx.globalCompositeOperation = 'source-in';
+                    ctx.fillStyle = color;
+                    ctx.fillRect(0, 0, c.width, c.height);
+                    
+                    resolve(c.toDataURL());
+                };
+                img.src = dataUrl;
+            });
+        }
 
         // --- Element Management ---
         function getBaseDimensions() {
@@ -324,19 +341,18 @@
                 width: w,
                 height: h,
                 content: content,
-                viewportWidth: dims.w, // Capture current viewport size for normalization later
+                originalContent: content, // Keep original for re-coloring
+                viewportWidth: dims.w,
                 viewportHeight: dims.h,
-                fontSize: 16
+                fontSize: 16,
+                color: type === 'rect' ? '#ffffff' : '#000000'
             };
 
             if(type === 'text') {
-                newEl.width = 200;
-                newEl.height = 30;
-                newEl.content = "Double click to edit";
+                newEl.width = 200; newEl.height = 30; newEl.content = "Double click to edit";
             }
             if(type === 'rect') {
-                newEl.width = 100;
-                newEl.height = 50;
+                newEl.width = 100; newEl.height = 50;
             }
 
             elements.push(newEl);
@@ -350,24 +366,39 @@
 
         function deleteElement(id) {
             elements = elements.filter(el => el.id !== id);
+            if(selectedElementId === id) selectedElementId = null;
             renderOverlays();
+        }
+
+        async function updateElementColor(id, newColor) {
+            let idx = elements.findIndex(el => el.id === id);
+            if(idx !== -1) {
+                let el = elements[idx];
+                el.color = newColor;
+                
+                // If signature, we need to re-process the image data
+                if(el.type === 'signature') {
+                     // Use original content (black ink) to generate new colored ink
+                     let newContent = await colorizeImage(el.originalContent, newColor);
+                     el.content = newContent;
+                }
+                renderOverlays();
+            }
         }
 
         function updateElement(id, updates) {
             let idx = elements.findIndex(el => el.id === id);
             if(idx !== -1) {
                 elements[idx] = { ...elements[idx], ...updates };
-                // Don't full re-render for simple content/pos updates if performance needed, 
-                // but for this scale, re-rendering DOM is fine.
+                // If text content updates, we don't re-render entire DOM to keep focus
             }
         }
 
         // --- Rendering Overlays (DOM) ---
         function renderOverlays() {
             const container = document.getElementById('overlay-layer');
-            container.innerHTML = ''; // Clear
+            container.innerHTML = ''; 
 
-            // Filter for current page
             const pageEls = elements.filter(el => el.page === pageNum);
 
             pageEls.forEach(el => {
@@ -378,12 +409,41 @@
                 div.style.width = (el.type === 'text' ? 'auto' : el.width + 'px');
                 div.style.height = (el.type === 'text' ? 'auto' : el.height + 'px');
                 
-                // Add Delete Button
-                const delBtn = document.createElement('div');
-                delBtn.className = 'delete-btn';
-                delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-                delBtn.onclick = (e) => { e.stopPropagation(); deleteElement(el.id); };
-                div.appendChild(delBtn);
+                // --- Properties Toolbar (Above Element) ---
+                if (selectedElementId === el.id) {
+                    const propsBar = document.createElement('div');
+                    propsBar.className = 'props-bar';
+                    
+                    // Color Picker (Rect & Signature only)
+                    if (el.type === 'rect' || el.type === 'signature') {
+                        const colorInput = document.createElement('input');
+                        colorInput.type = 'color';
+                        colorInput.value = el.color;
+                        colorInput.title = "Change Color";
+                        colorInput.oninput = (e) => updateElementColor(el.id, e.target.value);
+                        // Prevent dragging when clicking color
+                        colorInput.onmousedown = (e) => e.stopPropagation(); 
+                        propsBar.appendChild(colorInput);
+                    }
+
+                    // Delete Button (In toolbar now)
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'text-red-400 hover:text-red-300 p-1';
+                    delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+                    delBtn.onmousedown = (e) => e.stopPropagation();
+                    delBtn.onclick = (e) => { e.stopPropagation(); deleteElement(el.id); };
+                    propsBar.appendChild(delBtn);
+
+                    div.appendChild(propsBar);
+
+                    // Resize Handle (Bottom Right) - Not for Text
+                    if (el.type !== 'text') {
+                        const resizeHandle = document.createElement('div');
+                        resizeHandle.className = 'resize-handle';
+                        resizeHandle.onmousedown = (e) => startResize(e, el.id);
+                        div.appendChild(resizeHandle);
+                    }
+                }
 
                 // Content
                 if(el.type === 'text') {
@@ -392,27 +452,22 @@
                     textarea.value = el.content;
                     textarea.style.fontSize = el.fontSize + 'px';
                     textarea.style.minWidth = '150px';
-                    textarea.readOnly = (selectedElementId !== el.id); // Only editable when selected
+                    textarea.readOnly = (selectedElementId !== el.id); 
                     
                     textarea.oninput = (e) => {
                          el.content = e.target.value; 
-                         // Auto-expand height
                          e.target.style.height = 'auto';
                          e.target.style.height = e.target.scrollHeight + 'px';
                     };
-                    // Handle double click to focus
                     div.ondblclick = (e) => {
                         e.stopPropagation();
                         selectedElementId = el.id;
-                        renderOverlays(); // Re-render to enable readonly=false
-                        // Determine the newly created textarea in the new DOM
-                        // We rely on render sync.
-                        // Ideally we'd optimize this, but for now:
+                        renderOverlays(); 
                     };
                     div.appendChild(textarea);
 
                 } else if(el.type === 'rect') {
-                    div.style.backgroundColor = 'white';
+                    div.style.backgroundColor = el.color;
                     div.style.border = '1px solid #ccc';
                 } else if(el.type === 'image' || el.type === 'signature') {
                     const img = document.createElement('img');
@@ -431,32 +486,48 @@
             });
         }
 
-        // --- Dragging Logic ---
+        // --- Dragging & Resizing Logic ---
         let isDragging = false;
+        let isResizing = false;
         let dragOffset = { x: 0, y: 0 };
-        let currentDragId = null;
+        let activeElementId = null;
+        let startResizeX, startResizeY, startWidth, startHeight;
 
         function startDrag(e, id) {
             e.stopPropagation();
+            if (isResizing) return; // Don't drag if we hit the resize handle
+
             selectedElementId = id;
-            currentDragId = id;
+            activeElementId = id;
             isDragging = true;
             
             const el = elements.find(x => x.id === id);
             const containerRect = document.getElementById('overlay-layer').getBoundingClientRect();
             
-            // Mouse X relative to container - Element X
             const mouseX = e.clientX - containerRect.left;
             const mouseY = e.clientY - containerRect.top;
             
             dragOffset.x = mouseX - el.x;
             dragOffset.y = mouseY - el.y;
             
-            renderOverlays(); // To show selection
+            renderOverlays(); 
+        }
+
+        function startResize(e, id) {
+            e.stopPropagation();
+            e.preventDefault(); // Prevent text selection
+            isResizing = true;
+            activeElementId = id;
+            
+            const el = elements.find(x => x.id === id);
+            startResizeX = e.clientX;
+            startResizeY = e.clientY;
+            startWidth = el.width;
+            startHeight = el.height;
         }
 
         window.addEventListener('mousemove', (e) => {
-            if(isDragging && currentDragId) {
+            if (isDragging && activeElementId) {
                 const container = document.getElementById('overlay-layer');
                 const containerRect = container.getBoundingClientRect();
                 
@@ -466,13 +537,21 @@
                 let newX = mouseX - dragOffset.x;
                 let newY = mouseY - dragOffset.y;
                 
-                // Update local model
-                let el = elements.find(x => x.id === currentDragId);
+                let el = elements.find(x => x.id === activeElementId);
                 if(el) {
                     el.x = newX;
                     el.y = newY;
-                    
-                    // Direct DOM update for performance (optional, can just re-render)
+                    renderOverlays();
+                }
+            } else if (isResizing && activeElementId) {
+                const deltaX = e.clientX - startResizeX;
+                const deltaY = e.clientY - startResizeY;
+                
+                let el = elements.find(x => x.id === activeElementId);
+                if(el) {
+                    // Min size check
+                    el.width = Math.max(20, startWidth + deltaX);
+                    el.height = Math.max(20, startHeight + deltaY);
                     renderOverlays();
                 }
             }
@@ -480,10 +559,10 @@
 
         window.addEventListener('mouseup', () => {
             isDragging = false;
-            currentDragId = null;
+            isResizing = false;
+            activeElementId = null;
         });
 
-        // Deselect on bg click
         document.getElementById('workspace-container').addEventListener('mousedown', (e) => {
             if(e.target.id === 'workspace-container' || e.target.id === 'overlay-layer') {
                 selectedElementId = null;
@@ -494,23 +573,28 @@
         // --- Tool Selection ---
         function setTool(toolName) {
             activeTool = toolName;
-            // Update UI
             document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.className = btn.className.replace(' bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50', '');
             });
-            // Highlight active (simple check based on onclick content or id)
-            // For simplicity, just reset classes and let user click work
-            // Ideally add IDs to buttons to manage active state class
         }
 
         // --- PDF Saving ---
         async function savePdf() {
             if(!pdfBytes) return;
-            
             const { PDFDocument, rgb, StandardFonts } = PDFLib;
             const pdfDoc = await PDFDocument.load(pdfBytes);
             const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
             const pages = pdfDoc.getPages();
+
+            // Helper to parse hex color to RGB (0-1 range)
+            const hexToRgb = (hex) => {
+                var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16) / 255,
+                    g: parseInt(result[2], 16) / 255,
+                    b: parseInt(result[3], 16) / 255
+                } : { r: 0, g: 0, b: 0 };
+            }
 
             for (const el of elements) {
                 const pageIndex = el.page - 1;
@@ -519,42 +603,30 @@
                 const page = pages[pageIndex];
                 const { width, height } = page.getSize();
                 
-                // Scale Logic:
-                // We rendered the PDF at 'scale'. The DOM elements are positioned based on that scale.
-                // We need to map back to PDF Point units.
-                
-                // Logic: (Element Pos / Viewport Dimension) * PDF Dimension
                 const scaleX = width / el.viewportWidth;
                 const scaleY = height / el.viewportHeight;
                 
                 const pdfX = el.x * scaleX;
-                // PDF Y is from bottom. 
-                // HTML: Top=0. PDF: Bottom=0.
-                // We calculate distance from top in PDF units, then subtract from height.
                 const elementYFromTop = el.y * scaleY;
                 const elementHeightPDF = (el.type === 'text' ? el.fontSize : el.height) * scaleY;
-                
-                // For text, y is baseline. For images, y is bottom-left usually in pdf-lib drawImage options?
-                // pdf-lib drawImage: x,y is bottom-left.
-                // pdf-lib drawText: x,y is bottom-left of baseline.
-                
                 const pdfY = height - elementYFromTop - elementHeightPDF;
 
                 if (el.type === 'text') {
                     page.drawText(el.content, {
                         x: pdfX,
-                        y: height - (el.y * scaleY) - (el.fontSize * scaleY), // approx baseline fix
+                        y: height - (el.y * scaleY) - (el.fontSize * scaleY),
                         size: el.fontSize * scaleY,
                         font: helveticaFont,
                         color: rgb(0, 0, 0),
                     });
                 } else if (el.type === 'rect') {
+                    const c = hexToRgb(el.color);
                     page.drawRectangle({
                         x: pdfX,
                         y: height - ((el.y + el.height) * scaleY),
                         width: el.width * scaleX,
                         height: el.height * scaleY,
-                        color: rgb(1, 1, 1), // White
+                        color: rgb(c.r, c.g, c.b),
                     });
                 } else if (el.type === 'image' || el.type === 'signature') {
                      let img;
@@ -563,7 +635,6 @@
                      } else {
                          img = await pdfDoc.embedJpg(el.content);
                      }
-                     
                      page.drawImage(img, {
                          x: pdfX,
                          y: height - ((el.y + el.height) * scaleY),
@@ -588,8 +659,7 @@
 
         function openSignatureModal() {
             document.getElementById('signature-modal').classList.add('active');
-            // Setup canvas context
-            sigCtx.strokeStyle = "#0f172a";
+            sigCtx.strokeStyle = "#000000"; // Always draw black initially, colorize later
             sigCtx.lineWidth = 2;
             sigCtx.lineCap = 'round';
         }
@@ -601,13 +671,11 @@
         }
         function confirmSignature() {
             let data = sigCanvas.toDataURL();
-            // Add as signature element
             addElement('signature', data, 150, 80);
             closeSignatureModal();
             clearSignature();
         }
 
-        // Sig Drawing Events
         sigCanvas.addEventListener('mousedown', (e) => {
             drawingSig = true;
             const rect = sigCanvas.getBoundingClientRect();
@@ -622,7 +690,6 @@
         });
         window.addEventListener('mouseup', () => { drawingSig = false; });
 
-        // Initialize Icons
         lucide.createIcons();
     </script>
 </body>
