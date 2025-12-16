@@ -1,709 +1,629 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Type, 
-  Image as ImageIcon, 
-  PenTool, 
-  Download, 
-  ChevronLeft, 
-  ChevronRight, 
-  Trash2, 
-  Upload, 
-  Move,
-  X,
-  Check,
-  ZoomIn,
-  ZoomOut,
-  Loader2,
-  Square,
-  Cpu,
-  Layers
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni-PDF Converter</title>
+    
+    <!-- 1. Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 950: '#020617' } // Ensure deep dark mode
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
 
-// Helper to load external scripts
-const loadScript = (src) => {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve();
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = () => resolve();
-    script.onerror = (err) => reject(err);
-    document.head.appendChild(script);
-  });
-};
+    <!-- 2. Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-export default function App() {
-  const [libsLoaded, setLibsLoaded] = useState(false);
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfBytes, setPdfBytes] = useState(null);
-  const [pdfDocument, setPdfDocument] = useState(null);
-  const [numPages, setNumPages] = useState(null);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [scale, setScale] = useState(1.0);
-  const [loading, setLoading] = useState(false);
-  
-  // State for added elements
-  const [elements, setElements] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+    <!-- 3. PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Set Worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 
-  // Tools: 'select', 'text', 'image', 'draw', 'rect'
-  const [activeTool, setActiveTool] = useState('select');
-  const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
-  // Refs
-  const fileInputRef = useRef(null);
-  const imageInputRef = useRef(null);
-  const signatureCanvasRef = useRef(null);
-  const canvasRef = useRef(null);
-  const containerRef = useRef(null);
-
-  // Load PDF libraries on mount
-  useEffect(() => {
-    const loadLibraries = async () => {
-      try {
-        await Promise.all([
-          loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'),
-          loadScript('https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js')
-        ]);
+    <style>
+        /* Custom Utilities */
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; overflow: hidden; }
+        .canvas-container { box-shadow: 0 0 50px -12px rgba(0, 0, 0, 0.5); transition: transform 0.2s ease-out; }
         
-        // Configure PDF.js worker
-        if (window.pdfjsLib) {
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        /* Draggable Element Styles */
+        .overlay-element { position: absolute; cursor: move; user-select: none; }
+        .overlay-element.selected { outline: 2px solid #06b6d4; outline-offset: 2px; }
+        .overlay-element:hover { outline: 1px solid #67e8f9; }
+        
+        /* Delete Button */
+        .delete-btn { 
+            position: absolute; top: -12px; right: -12px; 
+            background: #ef4444; color: white; border-radius: 50%; 
+            width: 20px; height: 20px; display: none; 
+            align-items: center; justify-content: center; cursor: pointer; z-index: 50;
+        }
+        .overlay-element.selected .delete-btn { display: flex; }
+
+        /* Text Area transparency */
+        textarea.pdf-input { 
+            background: transparent; border: none; outline: none; 
+            resize: none; overflow: hidden; width: 100%; height: 100%; 
+            color: #0f172a; font-family: sans-serif; line-height: 1.2;
         }
         
-        setLibsLoaded(true);
-      } catch (err) {
-        console.error("Failed to load PDF libraries", err);
-        alert("Failed to load PDF libraries. Please refresh the page.");
-      }
-    };
-    
-    loadLibraries();
-  }, []);
+        /* Modal Animation */
+        .modal { transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
+        .modal.active { opacity: 1; pointer-events: auto; }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
 
-  /**
-   * File Handling
-   */
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (file && file.type === 'application/pdf') {
-      setLoading(true);
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        setPdfFile(file);
-        setPdfBytes(arrayBuffer);
-        setElements([]);
-        setPageNumber(1);
-        
-        // Load document into PDF.js
-        const loadingTask = window.pdfjsLib.getDocument(new Uint8Array(arrayBuffer));
-        const doc = await loadingTask.promise;
-        setPdfDocument(doc);
-        setNumPages(doc.numPages);
-      } catch (error) {
-        console.error("Error loading PDF:", error);
-        alert("Could not parse PDF file.");
-      }
-      setLoading(false);
-    }
-  };
-
-  /**
-   * PDF Rendering Logic
-   */
-  useEffect(() => {
-    let isCancelled = false;
-
-    const renderPage = async () => {
-      if (!pdfDocument || !canvasRef.current) return;
-
-      try {
-        const page = await pdfDocument.getPage(pageNumber);
-        if (isCancelled) return;
-
-        const viewport = page.getViewport({ scale });
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
-
-        await page.render(renderContext).promise;
-      } catch (error) {
-        console.error("Error rendering page:", error);
-      }
-    };
-
-    renderPage();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [pdfDocument, pageNumber, scale]);
-
-  /**
-   * PDF Generation & Saving
-   */
-  const savePdf = async () => {
-    if (!pdfBytes || !window.PDFLib) return;
-
-    try {
-      const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
-      
-      const pdfDoc = await PDFDocument.load(pdfBytes);
-      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-      const pages = pdfDoc.getPages();
-
-      for (const el of elements) {
-        const pageIndex = el.page - 1;
-        if (pageIndex >= pages.length) continue;
-        
-        const page = pages[pageIndex];
-        const { width, height } = page.getSize();
-        
-        // Normalization logic
-        const renderedWidth = el.viewportWidth || (canvasRef.current?.width || 600);
-        const renderedHeight = el.viewportHeight || (canvasRef.current?.height || 800);
-        
-        const scaleX = width / renderedWidth;
-        const scaleY = height / renderedHeight;
-
-        if (el.type === 'text') {
-          page.drawText(el.content, {
-            x: el.x * scaleX,
-            y: height - (el.y * scaleY) - (el.fontSize * scaleY),
-            size: el.fontSize * scaleY,
-            font: helveticaFont,
-            color: rgb(0, 0, 0),
-          });
-        } else if (el.type === 'rect') {
-           page.drawRectangle({
-             x: el.x * scaleX,
-             y: height - ((el.y + el.height) * scaleY),
-             width: el.width * scaleX,
-             height: el.height * scaleY,
-             color: rgb(1, 1, 1), // White
-           });
-        } else if (el.type === 'image' || el.type === 'signature') {
-           let image;
-           try {
-             if (el.content.startsWith('data:image/png')) {
-               image = await pdfDoc.embedPng(el.content);
-             } else {
-               image = await pdfDoc.embedJpg(el.content);
-             }
-           } catch (e) {
-             console.warn("Could not embed image", e);
-             continue;
-           }
-           
-           page.drawImage(image, {
-             x: el.x * scaleX,
-             y: height - ((el.y + el.height) * scaleY),
-             width: el.width * scaleX,
-             height: el.height * scaleY,
-           });
-        }
-      }
-
-      const pdfBytesSaved = await pdfDoc.save();
-      const blob = new Blob([pdfBytesSaved], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'edited_document.pdf';
-      link.click();
-    } catch (err) {
-      console.error("Error saving PDF:", err);
-      alert("An error occurred while generating the PDF. Please try again.");
-    }
-  };
-
-  /**
-   * Element Management Helpers
-   */
-  const getViewportDimensions = () => {
-      if (canvasRef.current) {
-          return { width: canvasRef.current.width, height: canvasRef.current.height };
-      }
-      return { width: 600, height: 800 };
-  };
-
-  const addText = () => {
-    const { width, height } = getViewportDimensions();
-    const newEl = {
-      id: Date.now(),
-      type: 'text',
-      x: width / 2 - 50,
-      y: height / 2 - 10,
-      content: 'Double click to edit',
-      fontSize: 16,
-      page: pageNumber,
-      viewportWidth: width,
-      viewportHeight: height
-    };
-    setElements([...elements, newEl]);
-    setSelectedId(newEl.id);
-    setActiveTool('select');
-  };
-
-  const addRect = () => {
-    const { width, height } = getViewportDimensions();
-    const newEl = {
-      id: Date.now(),
-      type: 'rect',
-      x: width / 2 - 50,
-      y: height / 2 - 25,
-      width: 100,
-      height: 50,
-      page: pageNumber,
-      viewportWidth: width,
-      viewportHeight: height
-    };
-    setElements([...elements, newEl]);
-    setSelectedId(newEl.id);
-    setActiveTool('select');
-  };
-
-  const addImage = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const { width, height } = getViewportDimensions();
-          const aspectRatio = img.width / img.height;
-          const initialWidth = 150;
-          const initialHeight = initialWidth / aspectRatio;
-
-          const newEl = {
-            id: Date.now(),
-            type: 'image',
-            x: width / 2 - initialWidth / 2,
-            y: height / 2 - initialHeight / 2,
-            width: initialWidth,
-            height: initialHeight,
-            content: event.target.result,
-            page: pageNumber,
-            viewportWidth: width,
-            viewportHeight: height
-          };
-          setElements([...elements, newEl]);
-          setSelectedId(newEl.id);
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const addSignature = (signatureDataUrl) => {
-     const { width, height } = getViewportDimensions();
-     const newEl = {
-        id: Date.now(),
-        type: 'signature',
-        x: width / 2 - 75,
-        y: height / 2 - 40,
-        width: 150,
-        height: 80, 
-        content: signatureDataUrl,
-        page: pageNumber,
-        viewportWidth: width,
-        viewportHeight: height
-      };
-      setElements([...elements, newEl]);
-      setSelectedId(newEl.id);
-      setShowSignatureModal(false);
-  };
-
-  const updateElement = (id, updates) => {
-    setElements(elements.map(el => el.id === id ? { ...el, ...updates } : el));
-  };
-
-  const deleteElement = (id) => {
-    setElements(elements.filter(el => el.id !== id));
-    setSelectedId(null);
-  };
-
-  // --- Interaction Handlers ---
-  const handleMouseDown = (e, id) => {
-    if (activeTool !== 'select') return;
-    e.stopPropagation();
-    setSelectedId(id);
-    setIsDragging(true);
-    
-    const el = elements.find(item => item.id === id);
-    if(el && containerRef.current) {
-        // Calculate the mouse position relative to the container
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - containerRect.left;
-        const mouseY = e.clientY - containerRect.top;
-        
-        // Offset is distance from mouse to element top-left
-        setDragOffset({
-            x: mouseX - el.x,
-            y: mouseY - el.y
-        });
-    }
-  };
-
-  const handleMouseMove = (e) => {
-    if (isDragging && selectedId && containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - containerRect.left;
-      const mouseY = e.clientY - containerRect.top;
-      
-      const newX = mouseX - dragOffset.x;
-      const newY = mouseY - dragOffset.y;
-      
-      updateElement(selectedId, { x: newX, y: newY });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const clearSignature = () => {
-    if (!signatureCanvasRef.current) return;
-    const canvas = signatureCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  };
-
-  const saveSignature = () => {
-    if (!signatureCanvasRef.current) return;
-    const canvas = signatureCanvasRef.current;
-    addSignature(canvas.toDataURL());
-  };
-
-  // Signature Pad Setup
-  useEffect(() => {
-    if (showSignatureModal && signatureCanvasRef.current) {
-        const canvas = signatureCanvasRef.current;
-        const ctx = canvas.getContext('2d');
-        ctx.strokeStyle = '#0f172a'; // slate-900
-        ctx.lineWidth = 2;
-        
-        let drawing = false;
-        const startDraw = (e) => {
-            drawing = true;
-            const rect = canvas.getBoundingClientRect();
-            ctx.beginPath();
-            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-        };
-        const draw = (e) => {
-            if(!drawing) return;
-            const rect = canvas.getBoundingClientRect();
-            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-            ctx.stroke();
-        };
-        const endDraw = () => { drawing = false; };
-
-        canvas.addEventListener('mousedown', startDraw);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', endDraw);
-        
-        return () => {
-            canvas.removeEventListener('mousedown', startDraw);
-            canvas.removeEventListener('mousemove', draw);
-            canvas.removeEventListener('mouseup', endDraw);
-        };
-    }
-  }, [showSignatureModal]);
-
-  if (!libsLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin text-cyan-500" size={48} />
-          <p className="text-cyan-400 font-mono tracking-widest text-sm">INITIALIZING OMNI-SYSTEMS...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!pdfFile) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-slate-200">
-        <div className="bg-slate-900 p-12 rounded-2xl shadow-2xl border border-slate-800 max-w-lg w-full relative overflow-hidden group">
-            {/* Decoration */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500"></div>
-            <div className="absolute -top-10 -right-10 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all duration-500"></div>
-
-          <div className="w-20 h-20 bg-slate-800 text-cyan-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner ring-1 ring-slate-700">
-            <Cpu size={40} />
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">Omni-PDF <span className="text-cyan-400">Converter</span></h1>
-          <p className="text-slate-400 mb-8 font-light">Advanced Document Manipulation System</p>
-          
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold py-4 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/20"
-          >
-            {loading ? <Loader2 className="animate-spin" /> : <Upload size={20} />} Initialize Document
-          </button>
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept="application/pdf" 
-            onChange={handleFileChange}
-          />
-          
-          <div className="mt-8 pt-6 border-t border-slate-800 flex justify-between text-[10px] uppercase tracking-widest text-slate-500 font-mono">
-             <span>Property of Omni-Science</span>
-             <span>Architect: king_of_coding</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 flex flex-col overflow-hidden text-slate-200 font-sans" 
-        onMouseMove={(e) => isDragging && handleMouseMove(e)} 
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-    >
-      
-      {/* --- Toolbar --- */}
-      <div className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-20 shadow-md shrink-0">
-        <div className="flex items-center gap-4">
-          <span className="font-bold text-slate-100 flex items-center gap-2 tracking-tight">
-             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded flex items-center justify-center text-white shadow-lg shadow-cyan-900/50">
-                <Layers size={18} />
-             </div>
-             Omni-PDF
-          </span>
-          <div className="h-6 w-px bg-slate-700 mx-2"></div>
-          
-          <button 
-            onClick={() => setActiveTool('select')}
-            className={`p-2 rounded-lg transition-all duration-200 ${activeTool === 'select' ? 'bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            title="Select Tool"
-          >
-            <Move size={18} />
-          </button>
-          
-          <button 
-            onClick={addText}
-            className={`p-2 rounded-lg transition-all duration-200 ${activeTool === 'text' ? 'bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            title="Add Text"
-          >
-            <Type size={18} />
-          </button>
-          
-          <button 
-            onClick={addRect}
-            className={`p-2 rounded-lg transition-all duration-200 ${activeTool === 'rect' ? 'bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            title="Whiteout (Rectangle)"
-          >
-            <Square size={18} />
-          </button>
-          
-          <button 
-            onClick={() => imageInputRef.current?.click()}
-            className={`p-2 rounded-lg transition-all duration-200 ${activeTool === 'image' ? 'bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            title="Add Image"
-          >
-            <ImageIcon size={18} />
-            <input 
-                type="file" 
-                ref={imageInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                onChange={addImage}
-            />
-          </button>
-          
-          <button 
-            onClick={() => setShowSignatureModal(true)}
-            className={`p-2 rounded-lg transition-all duration-200 ${activeTool === 'signature' ? 'bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            title="Add Signature"
-          >
-            <PenTool size={18} />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-4">
-            <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700">
-                <button onClick={() => setScale(Math.max(0.5, scale - 0.25))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ZoomOut size={16} /></button>
-                <span className="text-xs font-mono w-12 text-center text-cyan-400">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(Math.min(3.0, scale + 0.25))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ZoomIn size={16} /></button>
+    <!-- UPLOAD SCREEN -->
+    <div id="upload-screen" class="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div class="bg-slate-900 p-12 rounded-2xl shadow-2xl border border-slate-800 max-w-lg w-full relative overflow-hidden group">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500"></div>
+            <div class="w-20 h-20 bg-slate-800 text-cyan-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner ring-1 ring-slate-700">
+                <i data-lucide="cpu" width="40" height="40"></i>
             </div>
+            <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">Omni-PDF <span class="text-cyan-400">Converter</span></h1>
+            <p class="text-slate-400 mb-8 font-light">Advanced Document Manipulation System</p>
             
-            <button 
-                onClick={savePdf}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/40 border border-cyan-500"
-            >
-                <Download size={18} /> Export
+            <button onclick="document.getElementById('file-input').click()" class="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold py-4 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/20">
+                <i data-lucide="upload" width="20"></i> Initialize Document
             </button>
+            <input type="file" id="file-input" class="hidden" accept="application/pdf">
+            
+            <div class="mt-8 pt-6 border-t border-slate-800 flex justify-between text-[10px] uppercase tracking-widest text-slate-500 font-mono">
+                <span>Property of Omni-Science</span>
+                <span>Architect: king_of_coding</span>
+            </div>
         </div>
-      </div>
+    </div>
 
-      {/* --- Main Workspace --- */}
-      <div className="flex-1 overflow-auto bg-slate-950 flex justify-center p-8 relative">
-        <div 
-            ref={containerRef}
-            className="relative shadow-2xl transition-transform duration-200 ease-out" 
-            style={{ 
-                width: canvasRef.current ? canvasRef.current.width : 'auto',
-                height: canvasRef.current ? canvasRef.current.height : 'auto',
-                boxShadow: '0 0 50px -12px rgba(0, 0, 0, 0.5)'
-            }}
-        >
-          {/* Canvas for PDF rendering - Keeping it white as it is paper */}
-          <canvas ref={canvasRef} className="block bg-white" />
-
-          {/* --- Overlay Layer --- */}
-          <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
-            {elements.filter(el => el.page === pageNumber).map(el => (
-              <div
-                key={el.id}
-                className={`absolute group pointer-events-auto cursor-move ${selectedId === el.id ? 'ring-2 ring-cyan-500 ring-offset-2 ring-offset-transparent' : 'hover:ring-1 hover:ring-cyan-300'}`}
-                style={{
-                  left: el.x,
-                  top: el.y,
-                  width: el.type === 'text' ? 'auto' : el.width,
-                  height: el.type === 'text' ? 'auto' : el.height,
-                }}
-                onMouseDown={(e) => handleMouseDown(e, el.id)}
-                onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedId(el.id);
-                }}
-              >
-                {/* Delete Button */}
-                {(selectedId === el.id) && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); deleteElement(el.id); }}
-                    className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 z-50"
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-
-                {/* Content */}
-                {el.type === 'text' ? (
-                  <textarea
-                    value={el.content}
-                    onChange={(e) => updateElement(el.id, { content: e.target.value })}
-                    className="bg-transparent resize-none border-none outline-none overflow-hidden w-full h-full text-slate-900 font-sans"
-                    style={{ 
-                        fontSize: `${el.fontSize}px`, 
-                        minWidth: '150px',
-                        lineHeight: 1.2,
-                        whiteSpace: 'pre-wrap'
-                    }}
-                    readOnly={selectedId !== el.id}
-                  />
-                ) : el.type === 'rect' ? (
-                  <div className="w-full h-full bg-white border border-slate-200"></div>
-                ) : (
-                  <img 
-                    src={el.content} 
-                    alt="element" 
-                    className="w-full h-full object-contain pointer-events-none select-none"
-                  />
-                )}
-                
-                {/* Resize Handle */}
-                {selectedId === el.id && el.type !== 'text' && (
-                    <div 
-                        className="absolute bottom-0 right-0 w-4 h-4 bg-cyan-500 cursor-se-resize rounded-full border-2 border-slate-900"
-                        onMouseDown={(e) => {
-                            e.stopPropagation();
-                        }}
-                    ></div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* --- Footer / Navigation --- */}
-      {numPages && (
-          <div className="h-14 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-6 z-20 shrink-0">
-             <div className="w-1/3 text-xs text-slate-500 font-mono flex gap-4">
-                <span className="text-cyan-600/50">SYSTEM: ONLINE</span>
-                <span>OWNER: OMNI-SCIENCE</span>
-             </div>
-
-             <div className="flex items-center justify-center gap-4 w-1/3">
-                <button 
-                    onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
-                    disabled={pageNumber <= 1}
-                    className="p-2 rounded hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent text-cyan-400 transition-colors"
-                >
-                    <ChevronLeft size={20} />
-                </button>
-                <span className="text-sm font-medium text-slate-300 font-mono">
-                    PAGE <span className="text-white">{pageNumber}</span> / {numPages}
+    <!-- APP INTERFACE (Hidden initially) -->
+    <div id="app-interface" class="flex flex-col h-full hidden">
+        
+        <!-- TOOLBAR -->
+        <div class="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-20 shadow-md shrink-0">
+            <div class="flex items-center gap-4">
+                <span class="font-bold text-slate-100 flex items-center gap-2 tracking-tight">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded flex items-center justify-center text-white shadow-lg shadow-cyan-900/50">
+                        <i data-lucide="layers" width="18"></i>
+                    </div>
+                    Omni-PDF
                 </span>
-                <button 
-                    onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
-                    disabled={pageNumber >= numPages}
-                    className="p-2 rounded hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent text-cyan-400 transition-colors"
-                >
-                    <ChevronRight size={20} />
+                <div class="h-6 w-px bg-slate-700 mx-2"></div>
+                
+                <!-- Tools -->
+                <button onclick="setTool('select')" id="tool-select" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50" title="Select">
+                    <i data-lucide="move" width="18"></i>
                 </button>
-             </div>
-
-             <div className="w-1/3 text-right text-xs text-slate-600 font-mono">
-                ARCHITECT: KING_OF_CODING
-             </div>
-          </div>
-      )}
-
-      {/* --- Signature Modal --- */}
-      {showSignatureModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md overflow-hidden">
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-                <h3 className="font-bold text-lg text-slate-200">Initialize Signature</h3>
-                <button onClick={() => setShowSignatureModal(false)} className="text-slate-500 hover:text-slate-300">
-                    <X size={20} />
+                <button onclick="addText()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Add Text">
+                    <i data-lucide="type" width="18"></i>
                 </button>
+                <button onclick="addRect()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Whiteout">
+                    <i data-lucide="square" width="18"></i>
+                </button>
+                <button onclick="document.getElementById('image-input').click()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Add Image">
+                    <i data-lucide="image" width="18"></i>
+                </button>
+                <input type="file" id="image-input" class="hidden" accept="image/*">
+                
+                <button onclick="openSignatureModal()" class="tool-btn p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all" title="Add Signature">
+                    <i data-lucide="pen-tool" width="18"></i>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button onclick="updateScale(-0.25)" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><i data-lucide="zoom-out" width="16"></i></button>
+                    <span id="zoom-level" class="text-xs font-mono w-12 text-center text-cyan-400">100%</span>
+                    <button onclick="updateScale(0.25)" class="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><i data-lucide="zoom-in" width="16"></i></button>
+                </div>
+                
+                <button onclick="savePdf()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/40 border border-cyan-500">
+                    <i data-lucide="download" width="18"></i> Export
+                </button>
+            </div>
+        </div>
+
+        <!-- WORKSPACE -->
+        <div class="flex-1 overflow-auto bg-slate-950 flex justify-center p-8 relative" id="workspace-container">
+            <div id="pdf-wrapper" class="relative bg-white shadow-2xl">
+                <canvas id="the-canvas" class="block"></canvas>
+                <!-- Overlay Container -->
+                <div id="overlay-layer" class="absolute inset-0 z-10 overflow-hidden"></div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="h-14 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-6 z-20 shrink-0">
+            <div class="w-1/3 text-xs text-slate-500 font-mono flex gap-4">
+                <span class="text-cyan-600/50">SYSTEM: ONLINE</span>
+                <span>OWNER: OMNI-SCIENCE</span>
             </div>
             
-            <div className="p-6 bg-slate-950 flex justify-center">
-                <canvas 
-                    ref={signatureCanvasRef} 
-                    width={400} 
-                    height={200} 
-                    className="bg-white border-2 border-dashed border-slate-700 rounded-lg cursor-crosshair touch-none"
-                />
+            <div class="flex items-center justify-center gap-4 w-1/3">
+                <button onclick="changePage(-1)" class="text-cyan-400 hover:text-white disabled:opacity-30"><i data-lucide="chevron-left" width="20"></i></button>
+                <span class="text-sm font-medium text-slate-300 font-mono">PAGE <span id="page-num" class="text-white">1</span> / <span id="page-count">--</span></span>
+                <button onclick="changePage(1)" class="text-cyan-400 hover:text-white disabled:opacity-30"><i data-lucide="chevron-right" width="20"></i></button>
             </div>
 
-            <div className="p-4 bg-slate-900 border-t border-slate-800 flex justify-end gap-2">
-                <button 
-                    onClick={clearSignature}
-                    className="px-4 py-2 text-slate-400 hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
-                >
-                    Clear Input
-                </button>
-                <button 
-                    onClick={saveSignature}
-                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-lg shadow-cyan-900/40"
-                >
-                    <Check size={16} /> Confirm
+            <div class="w-1/3 text-right text-xs text-slate-600 font-mono">
+                ARCHITECT: KING_OF_CODING
+            </div>
+        </div>
+    </div>
+
+    <!-- SIGNATURE MODAL -->
+    <div id="signature-modal" class="modal fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md overflow-hidden">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-200">Initialize Signature</h3>
+                <button onclick="closeSignatureModal()" class="text-slate-500 hover:text-slate-300"><i data-lucide="x" width="20"></i></button>
+            </div>
+            <div class="p-6 bg-slate-950 flex justify-center">
+                <canvas id="sig-canvas" width="400" height="200" class="bg-white border-2 border-dashed border-slate-700 rounded-lg cursor-crosshair touch-none"></canvas>
+            </div>
+            <div class="p-4 bg-slate-900 border-t border-slate-800 flex justify-end gap-2">
+                <button onclick="clearSignature()" class="px-4 py-2 text-slate-400 hover:bg-slate-800 rounded-lg text-sm font-medium">Clear Input</button>
+                <button onclick="confirmSignature()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-cyan-900/40">
+                    <i data-lucide="check" width="16"></i> Confirm
                 </button>
             </div>
-          </div>
         </div>
-      )}
     </div>
-  );
-}
+
+    <!-- LOGIC -->
+    <script>
+        // --- State ---
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let scale = 1.0;
+        let canvas = document.getElementById('the-canvas');
+        let ctx = canvas.getContext('2d');
+        let pdfBytes = null; // Store raw bytes for saving
+
+        // Overlay Elements State
+        // Structure: { id, type, x, y, width, height, content, page, fontSize }
+        let elements = [];
+        let selectedElementId = null;
+        let activeTool = 'select'; // select, text, rect, image, signature
+
+        // --- PDF Rendering ---
+        function renderPage(num) {
+            pageRendering = true;
+            
+            // Fetch page
+            pdfDoc.getPage(num).then(function(page) {
+                let viewport = page.getViewport({scale: scale});
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                // Resize wrapper to match canvas
+                document.getElementById('pdf-wrapper').style.width = viewport.width + 'px';
+                document.getElementById('pdf-wrapper').style.height = viewport.height + 'px';
+
+                let renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                let renderTask = page.render(renderContext);
+
+                // Wait for render to finish
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    
+                    // Render Overlays for this page
+                    renderOverlays();
+
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
+            });
+
+            // Update page counters
+            document.getElementById('page-num').textContent = num;
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function changePage(offset) {
+            if (pageNum + offset >= 1 && pageNum + offset <= pdfDoc.numPages) {
+                pageNum += offset;
+                queueRenderPage(pageNum);
+            }
+        }
+
+        function updateScale(delta) {
+            let newScale = scale + delta;
+            if(newScale >= 0.5 && newScale <= 3.0) {
+                scale = newScale;
+                document.getElementById('zoom-level').innerText = Math.round(scale * 100) + '%';
+                queueRenderPage(pageNum);
+            }
+        }
+
+        // --- File Handling ---
+        document.getElementById('file-input').addEventListener('change', async function(e) {
+            let file = e.target.files[0];
+            if(file.type !== 'application/pdf') return;
+
+            // Read file
+            let arrayBuffer = await file.arrayBuffer();
+            pdfBytes = arrayBuffer; // Save for later
+
+            // Load PDF
+            pdfjsLib.getDocument(arrayBuffer).promise.then(function(pdfDoc_) {
+                pdfDoc = pdfDoc_;
+                document.getElementById('page-count').textContent = pdfDoc.numPages;
+                
+                // Show UI, Hide Upload
+                document.getElementById('upload-screen').classList.add('hidden');
+                document.getElementById('app-interface').classList.remove('hidden');
+                
+                renderPage(pageNum);
+            });
+        });
+
+        document.getElementById('image-input').addEventListener('change', function(e){
+            let file = e.target.files[0];
+            if(file){
+                let reader = new FileReader();
+                reader.onload = function(event){
+                    let img = new Image();
+                    img.onload = function(){
+                        // Calc Aspect Ratio
+                        let ar = img.width / img.height;
+                        let w = 150;
+                        let h = 150 / ar;
+                        addElement('image', event.target.result, w, h);
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+            // Reset
+            e.target.value = '';
+        });
+
+        // --- Element Management ---
+        function getBaseDimensions() {
+            return { w: canvas.width, h: canvas.height };
+        }
+
+        function addElement(type, content = '', w = 0, h = 0) {
+            const dims = getBaseDimensions();
+            const id = Date.now();
+            
+            let newEl = {
+                id: id,
+                type: type,
+                page: pageNum,
+                x: dims.w / 2 - (w || 100) / 2,
+                y: dims.h / 2 - (h || 50) / 2,
+                width: w,
+                height: h,
+                content: content,
+                viewportWidth: dims.w, // Capture current viewport size for normalization later
+                viewportHeight: dims.h,
+                fontSize: 16
+            };
+
+            if(type === 'text') {
+                newEl.width = 200;
+                newEl.height = 30;
+                newEl.content = "Double click to edit";
+            }
+            if(type === 'rect') {
+                newEl.width = 100;
+                newEl.height = 50;
+            }
+
+            elements.push(newEl);
+            selectedElementId = id;
+            setTool('select');
+            renderOverlays();
+        }
+
+        function addText() { addElement('text'); }
+        function addRect() { addElement('rect'); }
+
+        function deleteElement(id) {
+            elements = elements.filter(el => el.id !== id);
+            renderOverlays();
+        }
+
+        function updateElement(id, updates) {
+            let idx = elements.findIndex(el => el.id === id);
+            if(idx !== -1) {
+                elements[idx] = { ...elements[idx], ...updates };
+                // Don't full re-render for simple content/pos updates if performance needed, 
+                // but for this scale, re-rendering DOM is fine.
+            }
+        }
+
+        // --- Rendering Overlays (DOM) ---
+        function renderOverlays() {
+            const container = document.getElementById('overlay-layer');
+            container.innerHTML = ''; // Clear
+
+            // Filter for current page
+            const pageEls = elements.filter(el => el.page === pageNum);
+
+            pageEls.forEach(el => {
+                const div = document.createElement('div');
+                div.className = `overlay-element ${selectedElementId === el.id ? 'selected' : ''}`;
+                div.style.left = el.x + 'px';
+                div.style.top = el.y + 'px';
+                div.style.width = (el.type === 'text' ? 'auto' : el.width + 'px');
+                div.style.height = (el.type === 'text' ? 'auto' : el.height + 'px');
+                
+                // Add Delete Button
+                const delBtn = document.createElement('div');
+                delBtn.className = 'delete-btn';
+                delBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+                delBtn.onclick = (e) => { e.stopPropagation(); deleteElement(el.id); };
+                div.appendChild(delBtn);
+
+                // Content
+                if(el.type === 'text') {
+                    const textarea = document.createElement('textarea');
+                    textarea.className = 'pdf-input';
+                    textarea.value = el.content;
+                    textarea.style.fontSize = el.fontSize + 'px';
+                    textarea.style.minWidth = '150px';
+                    textarea.readOnly = (selectedElementId !== el.id); // Only editable when selected
+                    
+                    textarea.oninput = (e) => {
+                         el.content = e.target.value; 
+                         // Auto-expand height
+                         e.target.style.height = 'auto';
+                         e.target.style.height = e.target.scrollHeight + 'px';
+                    };
+                    // Handle double click to focus
+                    div.ondblclick = (e) => {
+                        e.stopPropagation();
+                        selectedElementId = el.id;
+                        renderOverlays(); // Re-render to enable readonly=false
+                        // Determine the newly created textarea in the new DOM
+                        // We rely on render sync.
+                        // Ideally we'd optimize this, but for now:
+                    };
+                    div.appendChild(textarea);
+
+                } else if(el.type === 'rect') {
+                    div.style.backgroundColor = 'white';
+                    div.style.border = '1px solid #ccc';
+                } else if(el.type === 'image' || el.type === 'signature') {
+                    const img = document.createElement('img');
+                    img.src = el.content;
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.pointerEvents = 'none';
+                    div.appendChild(img);
+                }
+
+                // Interaction Events
+                div.onmousedown = (e) => startDrag(e, el.id);
+                div.onclick = (e) => { e.stopPropagation(); selectedElementId = el.id; renderOverlays(); };
+
+                container.appendChild(div);
+            });
+        }
+
+        // --- Dragging Logic ---
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let currentDragId = null;
+
+        function startDrag(e, id) {
+            e.stopPropagation();
+            selectedElementId = id;
+            currentDragId = id;
+            isDragging = true;
+            
+            const el = elements.find(x => x.id === id);
+            const containerRect = document.getElementById('overlay-layer').getBoundingClientRect();
+            
+            // Mouse X relative to container - Element X
+            const mouseX = e.clientX - containerRect.left;
+            const mouseY = e.clientY - containerRect.top;
+            
+            dragOffset.x = mouseX - el.x;
+            dragOffset.y = mouseY - el.y;
+            
+            renderOverlays(); // To show selection
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if(isDragging && currentDragId) {
+                const container = document.getElementById('overlay-layer');
+                const containerRect = container.getBoundingClientRect();
+                
+                const mouseX = e.clientX - containerRect.left;
+                const mouseY = e.clientY - containerRect.top;
+                
+                let newX = mouseX - dragOffset.x;
+                let newY = mouseY - dragOffset.y;
+                
+                // Update local model
+                let el = elements.find(x => x.id === currentDragId);
+                if(el) {
+                    el.x = newX;
+                    el.y = newY;
+                    
+                    // Direct DOM update for performance (optional, can just re-render)
+                    renderOverlays();
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            currentDragId = null;
+        });
+
+        // Deselect on bg click
+        document.getElementById('workspace-container').addEventListener('mousedown', (e) => {
+            if(e.target.id === 'workspace-container' || e.target.id === 'overlay-layer') {
+                selectedElementId = null;
+                renderOverlays();
+            }
+        });
+
+        // --- Tool Selection ---
+        function setTool(toolName) {
+            activeTool = toolName;
+            // Update UI
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.className = btn.className.replace(' bg-slate-800 text-cyan-400 ring-1 ring-cyan-500/50', '');
+            });
+            // Highlight active (simple check based on onclick content or id)
+            // For simplicity, just reset classes and let user click work
+            // Ideally add IDs to buttons to manage active state class
+        }
+
+        // --- PDF Saving ---
+        async function savePdf() {
+            if(!pdfBytes) return;
+            
+            const { PDFDocument, rgb, StandardFonts } = PDFLib;
+            const pdfDoc = await PDFDocument.load(pdfBytes);
+            const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const pages = pdfDoc.getPages();
+
+            for (const el of elements) {
+                const pageIndex = el.page - 1;
+                if(pageIndex >= pages.length) continue;
+                
+                const page = pages[pageIndex];
+                const { width, height } = page.getSize();
+                
+                // Scale Logic:
+                // We rendered the PDF at 'scale'. The DOM elements are positioned based on that scale.
+                // We need to map back to PDF Point units.
+                
+                // Logic: (Element Pos / Viewport Dimension) * PDF Dimension
+                const scaleX = width / el.viewportWidth;
+                const scaleY = height / el.viewportHeight;
+                
+                const pdfX = el.x * scaleX;
+                // PDF Y is from bottom. 
+                // HTML: Top=0. PDF: Bottom=0.
+                // We calculate distance from top in PDF units, then subtract from height.
+                const elementYFromTop = el.y * scaleY;
+                const elementHeightPDF = (el.type === 'text' ? el.fontSize : el.height) * scaleY;
+                
+                // For text, y is baseline. For images, y is bottom-left usually in pdf-lib drawImage options?
+                // pdf-lib drawImage: x,y is bottom-left.
+                // pdf-lib drawText: x,y is bottom-left of baseline.
+                
+                const pdfY = height - elementYFromTop - elementHeightPDF;
+
+                if (el.type === 'text') {
+                    page.drawText(el.content, {
+                        x: pdfX,
+                        y: height - (el.y * scaleY) - (el.fontSize * scaleY), // approx baseline fix
+                        size: el.fontSize * scaleY,
+                        font: helveticaFont,
+                        color: rgb(0, 0, 0),
+                    });
+                } else if (el.type === 'rect') {
+                    page.drawRectangle({
+                        x: pdfX,
+                        y: height - ((el.y + el.height) * scaleY),
+                        width: el.width * scaleX,
+                        height: el.height * scaleY,
+                        color: rgb(1, 1, 1), // White
+                    });
+                } else if (el.type === 'image' || el.type === 'signature') {
+                     let img;
+                     if(el.content.startsWith('data:image/png')) {
+                         img = await pdfDoc.embedPng(el.content);
+                     } else {
+                         img = await pdfDoc.embedJpg(el.content);
+                     }
+                     
+                     page.drawImage(img, {
+                         x: pdfX,
+                         y: height - ((el.y + el.height) * scaleY),
+                         width: el.width * scaleX,
+                         height: el.height * scaleY,
+                     });
+                }
+            }
+
+            const pdfBytesSaved = await pdfDoc.save();
+            const blob = new Blob([pdfBytesSaved], { type: 'application/pdf' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'edited_document.pdf';
+            link.click();
+        }
+
+        // --- Signature Modal ---
+        let sigCanvas = document.getElementById('sig-canvas');
+        let sigCtx = sigCanvas.getContext('2d');
+        let drawingSig = false;
+
+        function openSignatureModal() {
+            document.getElementById('signature-modal').classList.add('active');
+            // Setup canvas context
+            sigCtx.strokeStyle = "#0f172a";
+            sigCtx.lineWidth = 2;
+            sigCtx.lineCap = 'round';
+        }
+        function closeSignatureModal() {
+            document.getElementById('signature-modal').classList.remove('active');
+        }
+        function clearSignature() {
+            sigCtx.clearRect(0,0, sigCanvas.width, sigCanvas.height);
+        }
+        function confirmSignature() {
+            let data = sigCanvas.toDataURL();
+            // Add as signature element
+            addElement('signature', data, 150, 80);
+            closeSignatureModal();
+            clearSignature();
+        }
+
+        // Sig Drawing Events
+        sigCanvas.addEventListener('mousedown', (e) => {
+            drawingSig = true;
+            const rect = sigCanvas.getBoundingClientRect();
+            sigCtx.beginPath();
+            sigCtx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        });
+        sigCanvas.addEventListener('mousemove', (e) => {
+            if(!drawingSig) return;
+            const rect = sigCanvas.getBoundingClientRect();
+            sigCtx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            sigCtx.stroke();
+        });
+        window.addEventListener('mouseup', () => { drawingSig = false; });
+
+        // Initialize Icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
