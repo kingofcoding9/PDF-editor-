@@ -357,7 +357,7 @@
 
             try {
                 let arrayBuffer = await file.arrayBuffer();
-                pdfBytes = arrayBuffer;
+                pdfBytes = arrayBuffer.slice(0); // Clone the buffer before passing to viewer
                 let pdfDoc_ = await pdfjsLib.getDocument(arrayBuffer).promise;
                 pdfDoc = pdfDoc_;
                 document.getElementById('page-count').textContent = pdfDoc.numPages;
