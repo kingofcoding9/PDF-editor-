@@ -1,0 +1,690 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Type, 
+  Image as ImageIcon, 
+  PenTool, 
+  Download, 
+  ChevronLeft, 
+  ChevronRight, 
+  Trash2, 
+  Upload, 
+  Move,
+  X,
+  Check,
+  ZoomIn,
+  ZoomOut,
+  Loader2,
+  Square
+} from 'lucide-react';
+
+// Helper to load external scripts
+const loadScript = (src) => {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = (err) => reject(err);
+    document.head.appendChild(script);
+  });
+};
+
+export default function App() {
+  const [libsLoaded, setLibsLoaded] = useState(false);
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfBytes, setPdfBytes] = useState(null);
+  const [pdfDocument, setPdfDocument] = useState(null);
+  const [numPages, setNumPages] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [scale, setScale] = useState(1.0);
+  const [loading, setLoading] = useState(false);
+  
+  // State for added elements
+  const [elements, setElements] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+
+  // Tools: 'select', 'text', 'image', 'draw', 'rect'
+  const [activeTool, setActiveTool] = useState('select');
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // Refs
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const signatureCanvasRef = useRef(null);
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Load PDF libraries on mount
+  useEffect(() => {
+    const loadLibraries = async () => {
+      try {
+        await Promise.all([
+          loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'),
+          loadScript('https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js')
+        ]);
+        
+        // Configure PDF.js worker
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        
+        setLibsLoaded(true);
+      } catch (err) {
+        console.error("Failed to load PDF libraries", err);
+        alert("Failed to load PDF libraries. Please refresh the page.");
+      }
+    };
+    
+    loadLibraries();
+  }, []);
+
+  /**
+   * File Handling
+   */
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (file && file.type === 'application/pdf') {
+      setLoading(true);
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        setPdfFile(file);
+        setPdfBytes(arrayBuffer);
+        setElements([]);
+        setPageNumber(1);
+        
+        // Load document into PDF.js
+        const loadingTask = window.pdfjsLib.getDocument(new Uint8Array(arrayBuffer));
+        const doc = await loadingTask.promise;
+        setPdfDocument(doc);
+        setNumPages(doc.numPages);
+      } catch (error) {
+        console.error("Error loading PDF:", error);
+        alert("Could not parse PDF file.");
+      }
+      setLoading(false);
+    }
+  };
+
+  /**
+   * PDF Rendering Logic
+   */
+  useEffect(() => {
+    let isCancelled = false;
+
+    const renderPage = async () => {
+      if (!pdfDocument || !canvasRef.current) return;
+
+      try {
+        const page = await pdfDocument.getPage(pageNumber);
+        if (isCancelled) return;
+
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+        
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+      } catch (error) {
+        console.error("Error rendering page:", error);
+      }
+    };
+
+    renderPage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pdfDocument, pageNumber, scale]);
+
+  /**
+   * PDF Generation & Saving
+   */
+  const savePdf = async () => {
+    if (!pdfBytes || !window.PDFLib) return;
+
+    try {
+      const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+      
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      const pages = pdfDoc.getPages();
+
+      for (const el of elements) {
+        const pageIndex = el.page - 1;
+        if (pageIndex >= pages.length) continue;
+        
+        const page = pages[pageIndex];
+        const { width, height } = page.getSize();
+        
+        // Normalization logic
+        const renderedWidth = el.viewportWidth || (canvasRef.current?.width || 600);
+        const renderedHeight = el.viewportHeight || (canvasRef.current?.height || 800);
+        
+        const scaleX = width / renderedWidth;
+        const scaleY = height / renderedHeight;
+
+        if (el.type === 'text') {
+          page.drawText(el.content, {
+            x: el.x * scaleX,
+            y: height - (el.y * scaleY) - (el.fontSize * scaleY),
+            size: el.fontSize * scaleY,
+            font: helveticaFont,
+            color: rgb(0, 0, 0),
+          });
+        } else if (el.type === 'rect') {
+           page.drawRectangle({
+             x: el.x * scaleX,
+             y: height - ((el.y + el.height) * scaleY),
+             width: el.width * scaleX,
+             height: el.height * scaleY,
+             color: rgb(1, 1, 1), // White
+           });
+        } else if (el.type === 'image' || el.type === 'signature') {
+           let image;
+           try {
+             if (el.content.startsWith('data:image/png')) {
+               image = await pdfDoc.embedPng(el.content);
+             } else {
+               image = await pdfDoc.embedJpg(el.content);
+             }
+           } catch (e) {
+             console.warn("Could not embed image", e);
+             continue;
+           }
+           
+           page.drawImage(image, {
+             x: el.x * scaleX,
+             y: height - ((el.y + el.height) * scaleY),
+             width: el.width * scaleX,
+             height: el.height * scaleY,
+           });
+        }
+      }
+
+      const pdfBytesSaved = await pdfDoc.save();
+      const blob = new Blob([pdfBytesSaved], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'edited_document.pdf';
+      link.click();
+    } catch (err) {
+      console.error("Error saving PDF:", err);
+      alert("An error occurred while generating the PDF. Please try again.");
+    }
+  };
+
+  /**
+   * Element Management Helpers
+   */
+  const getViewportDimensions = () => {
+      if (canvasRef.current) {
+          return { width: canvasRef.current.width, height: canvasRef.current.height };
+      }
+      return { width: 600, height: 800 };
+  };
+
+  const addText = () => {
+    const { width, height } = getViewportDimensions();
+    const newEl = {
+      id: Date.now(),
+      type: 'text',
+      x: width / 2 - 50,
+      y: height / 2 - 10,
+      content: 'Double click to edit',
+      fontSize: 16,
+      page: pageNumber,
+      viewportWidth: width,
+      viewportHeight: height
+    };
+    setElements([...elements, newEl]);
+    setSelectedId(newEl.id);
+    setActiveTool('select');
+  };
+
+  const addRect = () => {
+    const { width, height } = getViewportDimensions();
+    const newEl = {
+      id: Date.now(),
+      type: 'rect',
+      x: width / 2 - 50,
+      y: height / 2 - 25,
+      width: 100,
+      height: 50,
+      page: pageNumber,
+      viewportWidth: width,
+      viewportHeight: height
+    };
+    setElements([...elements, newEl]);
+    setSelectedId(newEl.id);
+    setActiveTool('select');
+  };
+
+  const addImage = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const { width, height } = getViewportDimensions();
+          const aspectRatio = img.width / img.height;
+          const initialWidth = 150;
+          const initialHeight = initialWidth / aspectRatio;
+
+          const newEl = {
+            id: Date.now(),
+            type: 'image',
+            x: width / 2 - initialWidth / 2,
+            y: height / 2 - initialHeight / 2,
+            width: initialWidth,
+            height: initialHeight,
+            content: event.target.result,
+            page: pageNumber,
+            viewportWidth: width,
+            viewportHeight: height
+          };
+          setElements([...elements, newEl]);
+          setSelectedId(newEl.id);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const addSignature = (signatureDataUrl) => {
+     const { width, height } = getViewportDimensions();
+     const newEl = {
+        id: Date.now(),
+        type: 'signature',
+        x: width / 2 - 75,
+        y: height / 2 - 40,
+        width: 150,
+        height: 80, 
+        content: signatureDataUrl,
+        page: pageNumber,
+        viewportWidth: width,
+        viewportHeight: height
+      };
+      setElements([...elements, newEl]);
+      setSelectedId(newEl.id);
+      setShowSignatureModal(false);
+  };
+
+  const updateElement = (id, updates) => {
+    setElements(elements.map(el => el.id === id ? { ...el, ...updates } : el));
+  };
+
+  const deleteElement = (id) => {
+    setElements(elements.filter(el => el.id !== id));
+    setSelectedId(null);
+  };
+
+  // --- Interaction Handlers ---
+  const handleMouseDown = (e, id) => {
+    if (activeTool !== 'select') return;
+    e.stopPropagation();
+    setSelectedId(id);
+    setIsDragging(true);
+    
+    const el = elements.find(item => item.id === id);
+    if(el && containerRef.current) {
+        // Calculate the mouse position relative to the container
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - containerRect.left;
+        const mouseY = e.clientY - containerRect.top;
+        
+        // Offset is distance from mouse to element top-left
+        setDragOffset({
+            x: mouseX - el.x,
+            y: mouseY - el.y
+        });
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging && selectedId && containerRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - containerRect.left;
+      const mouseY = e.clientY - containerRect.top;
+      
+      const newX = mouseX - dragOffset.x;
+      const newY = mouseY - dragOffset.y;
+      
+      updateElement(selectedId, { x: newX, y: newY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const clearSignature = () => {
+    if (!signatureCanvasRef.current) return;
+    const canvas = signatureCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const saveSignature = () => {
+    if (!signatureCanvasRef.current) return;
+    const canvas = signatureCanvasRef.current;
+    addSignature(canvas.toDataURL());
+  };
+
+  // Signature Pad Setup
+  useEffect(() => {
+    if (showSignatureModal && signatureCanvasRef.current) {
+        const canvas = signatureCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        
+        let drawing = false;
+        const startDraw = (e) => {
+            drawing = true;
+            const rect = canvas.getBoundingClientRect();
+            ctx.beginPath();
+            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        };
+        const draw = (e) => {
+            if(!drawing) return;
+            const rect = canvas.getBoundingClientRect();
+            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            ctx.stroke();
+        };
+        const endDraw = () => { drawing = false; };
+
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', endDraw);
+        
+        return () => {
+            canvas.removeEventListener('mousedown', startDraw);
+            canvas.removeEventListener('mousemove', draw);
+            canvas.removeEventListener('mouseup', endDraw);
+        };
+    }
+  }, [showSignatureModal]);
+
+  if (!libsLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-blue-600" size={48} />
+          <p className="text-slate-600 font-medium">Loading PDF Engine...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pdfFile) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white p-12 rounded-xl shadow-xl max-w-lg w-full">
+          <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Upload size={40} />
+          </div>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">PDF Editor</h1>
+          <p className="text-slate-500 mb-8">Upload a PDF to start adding text, images, and signatures.</p>
+          
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-all flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 className="animate-spin" /> : <Upload size={20} />} Select PDF File
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="application/pdf" 
+            onChange={handleFileChange}
+          />
+          
+          <div className="mt-8 text-xs text-slate-400">
+            Secure client-side processing. Your files never leave your browser.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col overflow-hidden" 
+        onMouseMove={(e) => isDragging && handleMouseMove(e)} 
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+    >
+      
+      {/* --- Toolbar --- */}
+      <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm shrink-0">
+        <div className="flex items-center gap-4">
+          <span className="font-bold text-slate-800 flex items-center gap-2">
+             <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white">PDF</div>
+             Editor
+          </span>
+          <div className="h-6 w-px bg-slate-200 mx-2"></div>
+          
+          <button 
+            onClick={() => setActiveTool('select')}
+            className={`p-2 rounded hover:bg-slate-100 transition-colors ${activeTool === 'select' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+            title="Select Tool"
+          >
+            <Move size={20} />
+          </button>
+          
+          <button 
+            onClick={addText}
+            className={`p-2 rounded hover:bg-slate-100 transition-colors ${activeTool === 'text' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+            title="Add Text"
+          >
+            <Type size={20} />
+          </button>
+          
+          <button 
+            onClick={addRect}
+            className={`p-2 rounded hover:bg-slate-100 transition-colors ${activeTool === 'rect' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+            title="Add Rectangle (Whiteout)"
+          >
+            <Square size={20} />
+          </button>
+          
+          <button 
+            onClick={() => imageInputRef.current?.click()}
+            className={`p-2 rounded hover:bg-slate-100 transition-colors ${activeTool === 'image' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+            title="Add Image"
+          >
+            <ImageIcon size={20} />
+            <input 
+                type="file" 
+                ref={imageInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={addImage}
+            />
+          </button>
+          
+          <button 
+            onClick={() => setShowSignatureModal(true)}
+            className={`p-2 rounded hover:bg-slate-100 transition-colors ${activeTool === 'signature' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+            title="Add Signature"
+          >
+            <PenTool size={20} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4">
+            <div className="flex items-center bg-slate-100 rounded-lg p-1">
+                <button onClick={() => setScale(Math.max(0.5, scale - 0.25))} className="p-1 hover:bg-white rounded"><ZoomOut size={16} /></button>
+                <span className="text-xs font-mono w-12 text-center">{Math.round(scale * 100)}%</span>
+                <button onClick={() => setScale(Math.min(3.0, scale + 0.25))} className="p-1 hover:bg-white rounded"><ZoomIn size={16} /></button>
+            </div>
+            
+            <button 
+                onClick={savePdf}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
+            >
+                <Download size={18} /> Save PDF
+            </button>
+        </div>
+      </div>
+
+      {/* --- Main Workspace --- */}
+      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-8 relative">
+        <div 
+            ref={containerRef}
+            className="relative shadow-xl bg-white" 
+            style={{ 
+                width: canvasRef.current ? canvasRef.current.width : 'auto',
+                height: canvasRef.current ? canvasRef.current.height : 'auto',
+            }}
+        >
+          {/* Canvas for PDF rendering */}
+          <canvas ref={canvasRef} className="block" />
+
+          {/* --- Overlay Layer --- */}
+          <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
+            {elements.filter(el => el.page === pageNumber).map(el => (
+              <div
+                key={el.id}
+                className={`absolute group pointer-events-auto cursor-move ${selectedId === el.id ? 'ring-2 ring-blue-500 ring-offset-1' : 'hover:ring-1 hover:ring-blue-300'}`}
+                style={{
+                  left: el.x,
+                  top: el.y,
+                  width: el.type === 'text' ? 'auto' : el.width,
+                  height: el.type === 'text' ? 'auto' : el.height,
+                }}
+                onMouseDown={(e) => handleMouseDown(e, el.id)}
+                onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedId(el.id);
+                    // For text elements, double click ensures they are active/editable
+                }}
+              >
+                {/* Delete Button */}
+                {(selectedId === el.id) && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); deleteElement(el.id); }}
+                    className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 z-50"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+
+                {/* Content */}
+                {el.type === 'text' ? (
+                  <textarea
+                    value={el.content}
+                    onChange={(e) => updateElement(el.id, { content: e.target.value })}
+                    className="bg-transparent resize-none border-none outline-none overflow-hidden w-full h-full text-slate-900 font-sans"
+                    style={{ 
+                        fontSize: `${el.fontSize}px`, 
+                        minWidth: '150px',
+                        lineHeight: 1.2,
+                        whiteSpace: 'pre-wrap'
+                    }}
+                    readOnly={selectedId !== el.id}
+                  />
+                ) : el.type === 'rect' ? (
+                  <div className="w-full h-full bg-white border border-slate-200"></div>
+                ) : (
+                  <img 
+                    src={el.content} 
+                    alt="element" 
+                    className="w-full h-full object-contain pointer-events-none select-none"
+                  />
+                )}
+                
+                {/* Resize Handle (Simple implementation for non-text) */}
+                {selectedId === el.id && el.type !== 'text' && (
+                    <div 
+                        className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 cursor-se-resize rounded-full border-2 border-white"
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            // Future: Implement resize logic
+                        }}
+                    ></div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* --- Footer / Navigation --- */}
+      {numPages && (
+          <div className="h-14 bg-white border-t border-slate-200 flex items-center justify-center gap-4 z-20 shrink-0">
+            <button 
+                onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
+                disabled={pageNumber <= 1}
+                className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 transition-colors"
+            >
+                <ChevronLeft size={20} />
+            </button>
+            <span className="text-sm font-medium text-slate-600">
+                Page {pageNumber} of {numPages}
+            </span>
+            <button 
+                onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
+                disabled={pageNumber >= numPages}
+                className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 transition-colors"
+            >
+                <ChevronRight size={20} />
+            </button>
+          </div>
+      )}
+
+      {/* --- Signature Modal --- */}
+      {showSignatureModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="font-bold text-lg">Add Signature</h3>
+                <button onClick={() => setShowSignatureModal(false)} className="text-slate-400 hover:text-slate-600">
+                    <X size={20} />
+                </button>
+            </div>
+            
+            <div className="p-6 bg-slate-50 flex justify-center">
+                <canvas 
+                    ref={signatureCanvasRef} 
+                    width={400} 
+                    height={200} 
+                    className="bg-white border-2 border-dashed border-slate-300 rounded-lg cursor-crosshair touch-none"
+                />
+            </div>
+
+            <div className="p-4 bg-white border-t border-slate-100 flex justify-end gap-2">
+                <button 
+                    onClick={clearSignature}
+                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium"
+                >
+                    Clear
+                </button>
+                <button 
+                    onClick={saveSignature}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                >
+                    <Check size={16} /> Add Signature
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
