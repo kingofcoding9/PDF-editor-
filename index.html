@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Omni-PDF: Command Deck</title>
     
-    <!-- 1. Tailwind CSS -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -20,87 +21,43 @@
                         sans: ['Rajdhani', 'ui-sans-serif', 'system-ui'],
                         mono: ['Share Tech Mono', 'monospace'],
                     },
-                    boxShadow: {
-                        'neon': '0 0 5px theme("colors.neon.400"), 0 0 20px theme("colors.neon.400")',
-                        'neon-sm': '0 0 2px theme("colors.neon.400"), 0 0 10px theme("colors.neon.600")',
-                        'panel': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-                    },
-                    animation: {
-                        'pulse-glow': 'pulseGlow 3s infinite',
-                        'scanline': 'scanline 8s linear infinite',
-                        'float': 'float 6s ease-in-out infinite',
-                    },
-                    keyframes: {
-                        pulseGlow: {
-                            '0%, 100%': { opacity: 1, filter: 'drop-shadow(0 0 5px #00f3ff)' },
-                            '50%': { opacity: 0.7, filter: 'drop-shadow(0 0 2px #00f3ff)' },
-                        },
-                        scanline: {
-                            '0%': { transform: 'translateY(-100%)' },
-                            '100%': { transform: 'translateY(100vh)' }
-                        },
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-10px)' }
-                        }
-                    }
+                    zIndex: { '60': '60', '70': '70', '100': '100', 'modal': '999' }
                 }
             }
         }
     </script>
     
-    <!-- Fonts for Sci-Fi look -->
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-
-    <!-- 2. Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Lobster&family=Dancing+Script:wght@400;700&family=Oswald:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    
     <script src="https://unpkg.com/lucide@latest"></script>
-
-    <!-- 3. Libraries -->
+    
+    <!-- PDF Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <!-- Three.js for Space Background -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
 
     <style>
-        body { 
+        body, html { 
+            height: 100%; width: 100%; margin: 0; padding: 0;
             background-color: #050505; 
             color: #cdd6f4; 
             overflow: hidden; 
             font-family: 'Rajdhani', sans-serif; 
+            touch-action: none; 
+            user-select: none;
         }
 
-        /* --- Holographic Panels --- */
         .glass-panel {
-            background: rgba(11, 13, 23, 0.65);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: rgba(11, 13, 23, 0.7); 
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(0, 243, 255, 0.15);
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-            position: relative;
-        }
-        
-        .glass-panel::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent);
-        }
-        
-        .glass-panel::after {
-            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.2), transparent);
         }
 
-        /* --- Tech Corners --- */
-        .tech-corner {
-            position: absolute; width: 8px; height: 8px;
-            border-color: #00f3ff; border-style: solid; transition: all 0.3s ease;
-        }
-        .tc-tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-        .tc-tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
-        .tc-bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
-        .tc-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
-
-        /* --- Controls --- */
         .cyber-btn {
             background: rgba(0, 243, 255, 0.05);
             border: 1px solid rgba(0, 243, 255, 0.3);
@@ -109,813 +66,960 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             transition: all 0.2s ease;
-            position: relative;
-            overflow: hidden;
         }
         .cyber-btn:hover:not(:disabled) {
             background: rgba(0, 243, 255, 0.15);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
             border-color: #00f3ff;
-            text-shadow: 0 0 5px #00f3ff;
+            transform: translateY(-1px);
         }
+        .cyber-btn:active { transform: translateY(1px); }
         .cyber-btn.active {
-            background: rgba(0, 243, 255, 0.2);
+            background: rgba(0, 243, 255, 0.25);
             box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.2);
             border-color: #00f3ff;
         }
-        .cyber-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: transparent; }
 
-        /* --- Canvas & Overlay --- */
-        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
-        #app-layer { position: relative; z-index: 10; height: 100%; display: flex; flex-direction: column; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #005f66; border-radius: 2px; }
+
+        .overlay-el { position: absolute; box-sizing: border-box; transform-origin: top left; cursor: grab; }
+        .overlay-el:active { cursor: grabbing; }
+        .overlay-el.selected { outline: 1px dashed #00f3ff; background: rgba(0, 243, 255, 0.05); z-index: 50; }
         
-        .overlay-el { position: absolute; cursor: grab; box-sizing: border-box; }
-        .overlay-el.selected { 
-            outline: 1px dashed #00f3ff; 
-            background: rgba(0, 243, 255, 0.05);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
-        }
-        
-        /* Resize Handle */
         .resize-handle {
             position: absolute; width: 12px; height: 12px; 
             background: #000; border: 2px solid #00f3ff; 
-            box-shadow: 0 0 5px #00f3ff;
-            z-index: 101; display: none;
+            border-radius: 50%; z-index: 60; display: none;
+            cursor: se-resize; right: -6px; bottom: -6px;
+            pointer-events: auto;
         }
         .overlay-el.selected .resize-handle { display: block; }
-        
-        /* Scrollbars */
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
-        ::-webkit-scrollbar-thumb { background: #005f66; }
-        ::-webkit-scrollbar-thumb:hover { background: #00f3ff; }
+
+        .text-content-area {
+            width: 100%; height: 100%;
+            background: transparent; border: none; outline: none;
+            resize: none; padding: 0; overflow: hidden; font-family: sans-serif;
+            pointer-events: none; 
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .overlay-el.editing .text-content-area { pointer-events: auto; cursor: text; }
+        .text-shield { position: absolute; inset: 0; z-index: 10; }
+        .overlay-el.editing .text-shield { display: none; }
 
         .scan-line {
             position: fixed; inset: 0; pointer-events: none; z-index: 5;
             background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 243, 255, 0.03) 2px, rgba(0, 243, 255, 0.03) 3px);
             background-size: 100% 4px;
         }
+
+        .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .thumbnail { transition: all 0.2s; border: 2px solid transparent; }
+        .thumbnail:hover { border-color: rgba(0, 243, 255, 0.3); }
+
+        #workspace { background: transparent; overflow: hidden; }
+        #pan-container { transform-origin: top left; }
+        #drawing-layer { pointer-events: none; }
+        #drawing-layer.active { pointer-events: auto; cursor: crosshair; }
+        #page-bg-layer { transition: border 0.3s; box-sizing: border-box; }
+        
+        .signature-item { position: relative; }
+        .delete-sig { display: flex; } 
+        
+        .layer-item:hover { background: rgba(255,255,255,0.05); }
+        .layer-item.active { background: rgba(0, 243, 255, 0.1); border-left: 2px solid #00f3ff; }
     </style>
 </head>
 <body>
 
-    <!-- 3D Background Container -->
-    <div id="bg-canvas"></div>
-    
-    <!-- CRT Effect Overlay -->
+    <canvas id="starfield" class="fixed inset-0 z-0 bg-[#050505]"></canvas>
     <div class="scan-line"></div>
+    <div id="toast" class="fixed bottom-4 right-4 bg-neon-900 border border-neon-400 text-neon-400 px-4 py-2 rounded shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[100] font-mono text-xs pointer-events-none">NOTIFICATION</div>
 
-    <!-- UI LAYER -->
-    <div id="app-layer">
-        
-        <!-- INITIAL UPLOAD -->
-        <div id="upload-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-black/40 backdrop-blur-sm transition-opacity duration-500">
-            <div class="glass-panel p-12 max-w-lg w-full text-center relative animate-float">
-                <div class="tech-corner tc-tl"></div><div class="tech-corner tc-tr"></div>
-                <div class="tech-corner tc-bl"></div><div class="tech-corner tc-br"></div>
-
-                <div class="w-24 h-24 mx-auto mb-6 relative">
+    <div id="app-layer" class="relative z-10 h-full flex flex-col">
+        <!-- START SCREEN -->
+        <div id="start-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 bg-black/20 backdrop-blur-sm transition-all duration-1000">
+            <div class="glass-panel p-8 md:p-12 max-w-lg w-full text-center relative animate-float rounded-xl border-neon-400/30">
+                <div class="w-20 h-20 mx-auto mb-6 relative">
                     <div class="absolute inset-0 border-2 border-neon-500 rounded-full animate-ping opacity-20"></div>
-                    <div class="absolute inset-2 border border-neon-400 rounded-full flex items-center justify-center bg-neon-900/20 shadow-neon">
-                        <i data-lucide="cpu" class="text-neon-400 w-10 h-10"></i>
-                    </div>
+                    <div class="absolute inset-2 border border-neon-400 rounded-full flex items-center justify-center bg-neon-900/20 shadow-neon"><i data-lucide="cpu" class="text-neon-400 w-10 h-10"></i></div>
                 </div>
-
-                <h1 class="text-5xl font-bold text-white mb-2 tracking-tighter uppercase font-sans">Omni<span class="text-neon-400">PDF</span></h1>
-                <p class="text-neon-600 mb-8 font-mono text-sm tracking-widest">SYSTEM READY // WAITING FOR INPUT</p>
-                
-                <button onclick="document.getElementById('file-input').click()" id="init-btn" class="cyber-btn w-full py-4 text-lg font-bold flex items-center justify-center gap-3 group">
-                    <i data-lucide="upload" class="group-hover:animate-bounce"></i> 
-                    <span>INITIALIZE SEQUENCE</span>
-                </button>
+                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2 tracking-tighter uppercase font-sans">Omni<span class="text-neon-400">PDF</span></h1>
+                <div class="space-y-3 mt-8">
+                    <button onclick="launchApp('upload')" id="upload-btn" class="cyber-btn w-full py-4 text-lg font-bold flex items-center justify-center gap-3 rounded group relative overflow-hidden">
+                        <div class="absolute inset-0 bg-neon-400/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div><i data-lucide="upload" class="group-hover:scale-110 transition-transform"></i> <span class="relative">UPLOAD PDF</span>
+                    </button>
+                    <button onclick="launchApp('create')" id="create-btn" class="cyber-btn w-full py-4 text-lg font-bold flex items-center justify-center gap-3 rounded group bg-transparent border-slate-600 text-slate-300 hover:text-white hover:border-white relative overflow-hidden">
+                        <div class="absolute inset-0 bg-white/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div><i data-lucide="file-plus"></i> <span class="relative">CREATE BLANK</span>
+                    </button>
+                </div>
                 <input type="file" id="file-input" class="hidden" accept="application/pdf">
-                
-                <div class="mt-6 flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>V 3.0.1</span>
-                    <span>SECURE CONNECTION</span>
-                </div>
+                <div class="mt-6 text-[10px] text-slate-500 font-mono">V 7.4.1 // PATCH</div>
             </div>
         </div>
 
-        <!-- MAIN DASHBOARD (Hidden Initially) -->
+        <!-- DASHBOARD -->
         <div id="dashboard" class="flex flex-col h-full hidden opacity-0 transition-opacity duration-1000">
-            
-            <!-- TOP COMMAND BAR -->
-            <div class="h-16 glass-panel flex items-center justify-between px-6 z-30 shrink-0 mx-2 mt-2 rounded-t-lg">
-                <div class="flex items-center gap-6">
-                    <div class="flex items-center gap-2">
-                        <i data-lucide="aperture" class="text-neon-400 animate-spin-slow" width="24"></i>
-                        <span class="font-bold text-xl tracking-widest text-white">OMNI<span class="text-neon-400">PDF</span></span>
-                    </div>
-                    <div class="h-8 w-px bg-neon-900"></div>
-                    <div class="flex gap-2">
-                        <button onclick="undo()" class="cyber-btn p-2 rounded" title="Undo"><i data-lucide="rotate-ccw" width="16"></i></button>
-                        <button onclick="redo()" class="cyber-btn p-2 rounded" title="Redo"><i data-lucide="rotate-cw" width="16"></i></button>
+            <!-- HEADER -->
+            <div class="h-14 md:h-16 glass-panel flex items-center justify-between px-2 md:px-6 shrink-0 z-50 border-b border-neon-500/20 relative">
+                <div class="flex items-center gap-2 md:gap-4">
+                    <button onclick="toggleSidebar('left')" class="md:hidden cyber-btn p-2 rounded"><i data-lucide="menu" width="18"></i></button>
+                    <span class="font-bold text-lg md:text-xl tracking-widest text-white truncate">OMNI<span class="text-neon-400">PDF</span></span>
+                    <div class="flex items-center gap-1 ml-4 border-l border-white/10 pl-4">
+                        <button onclick="undo()" class="cyber-btn p-1.5 rounded" title="Undo (Ctrl+Z)"><i data-lucide="rotate-ccw" width="16"></i></button>
+                        <button onclick="redo()" class="cyber-btn p-1.5 rounded" title="Redo (Ctrl+Y)"><i data-lucide="rotate-cw" width="16"></i></button>
                     </div>
                 </div>
-
-                <!-- Tools Array -->
-                <div class="flex items-center gap-1 bg-black/40 p-1 rounded border border-white/5">
-                    <button onclick="setTool('select')" id="btn-select" class="cyber-btn active p-2 rounded w-10 h-10 flex items-center justify-center" title="Select"><i data-lucide="mouse-pointer-2" width="18"></i></button>
-                    <button onclick="addText()" class="cyber-btn p-2 rounded w-10 h-10 flex items-center justify-center" title="Text"><i data-lucide="type" width="18"></i></button>
-                    <button onclick="addRect()" class="cyber-btn p-2 rounded w-10 h-10 flex items-center justify-center" title="Mask"><i data-lucide="square" width="18"></i></button>
-                    <button onclick="addHighlight()" class="cyber-btn p-2 rounded w-10 h-10 flex items-center justify-center" title="Highlight"><i data-lucide="highlighter" width="18"></i></button>
-                    <button onclick="setTool('draw')" id="btn-draw" class="cyber-btn p-2 rounded w-10 h-10 flex items-center justify-center" title="Draw"><i data-lucide="pen-tool" width="18"></i></button>
-                    <button onclick="triggerImageUpload()" class="cyber-btn p-2 rounded w-10 h-10 flex items-center justify-center" title="Image"><i data-lucide="image" width="18"></i></button>
-                    <input type="file" id="img-upload" class="hidden" accept="image/*">
-                    
-                    <div class="relative group">
-                        <button class="cyber-btn p-2 rounded w-10 h-10 flex items-center justify-center"><i data-lucide="stamp" width="18"></i></button>
-                        <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-32 glass-panel hidden group-hover:block p-1 z-50">
-                            <button onclick="addStamp('APPROVED', '#00f3ff')" class="w-full text-left px-3 py-2 text-xs text-neon-400 hover:bg-white/5">APPROVED</button>
-                            <button onclick="addStamp('TOP SECRET', '#ff2a6d')" class="w-full text-left px-3 py-2 text-xs text-alert-500 hover:bg-white/5">TOP SECRET</button>
-                            <button onclick="addStamp('DRAFT', '#94a3b8')" class="w-full text-left px-3 py-2 text-xs text-slate-400 hover:bg-white/5">DRAFT</button>
+                <div class="flex-1 mx-2 md:mx-4 overflow-x-auto no-scrollbar mask-gradient touch-pan-x">
+                    <div class="flex items-center justify-start md:justify-center gap-1 min-w-max px-1">
+                        <button onclick="setTool('select')" id="btn-select" class="cyber-btn active p-2 rounded" title="Select (V)"><i data-lucide="mouse-pointer-2" width="18"></i></button>
+                        <div class="w-px h-6 bg-white/10 mx-1"></div>
+                        <button onclick="addText()" class="cyber-btn p-2 rounded" title="Text"><i data-lucide="type" width="18"></i></button>
+                        <button onclick="addRect()" class="cyber-btn p-2 rounded" title="Rectangle"><i data-lucide="square" width="18"></i></button>
+                        <button onclick="addHighlight()" class="cyber-btn p-2 rounded" title="Highlight"><i data-lucide="highlighter" width="18"></i></button>
+                        <button onclick="setTool('draw')" id="btn-draw" class="cyber-btn p-2 rounded" title="Draw"><i data-lucide="pen-tool" width="18"></i></button>
+                        <button onclick="openSignatureModal()" class="cyber-btn p-2 rounded" title="Create Signature"><i data-lucide="feather" width="18"></i></button>
+                        <button onclick="triggerImageUpload()" class="cyber-btn p-2 rounded" title="Image"><i data-lucide="image" width="18"></i></button>
+                        <input type="file" id="img-upload" class="hidden" accept="image/*">
+                        <div class="relative">
+                            <button onclick="document.getElementById('stamp-dropdown').classList.toggle('hidden')" class="cyber-btn p-2 rounded" title="Stamps"><i data-lucide="stamp" width="18"></i></button>
+                            <div id="stamp-dropdown" class="absolute top-full right-0 mt-2 w-32 glass-panel hidden p-1 z-50 flex flex-col gap-1">
+                                <button onclick="addStamp('APPROVED', '#00f3ff'); this.parentElement.classList.add('hidden')" class="w-full text-left px-2 py-2 text-xs text-neon-400 hover:bg-white/5">APPROVED</button>
+                                <button onclick="addStamp('DRAFT', '#94a3b8'); this.parentElement.classList.add('hidden')" class="w-full text-left px-2 py-2 text-xs text-slate-400 hover:bg-white/5">DRAFT</button>
+                                <button onclick="addStamp('URGENT', '#ff2a6d'); this.parentElement.classList.add('hidden')" class="w-full text-left px-2 py-2 text-xs text-alert-500 hover:bg-white/5">URGENT</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center bg-black/40 rounded px-2 py-1 border border-white/5">
-                        <button onclick="zoom(-0.1)" class="text-neon-600 hover:text-neon-400"><i data-lucide="minus" width="14"></i></button>
-                        <span id="zoom-disp" class="text-xs font-mono w-14 text-center text-neon-400">100%</span>
-                        <button onclick="zoom(0.1)" class="text-neon-600 hover:text-neon-400"><i data-lucide="plus" width="14"></i></button>
-                    </div>
-                    <button onclick="exportPDF()" class="cyber-btn px-6 py-2 rounded text-sm font-bold flex items-center gap-2 shadow-neon-sm">
-                        <i data-lucide="download" width="16"></i> EXPORT
-                    </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleSidebar('right')" class="md:hidden cyber-btn p-2 rounded"><i data-lucide="sliders-horizontal" width="18"></i></button>
+                    <button onclick="exportPDF()" id="export-btn" class="cyber-btn px-3 md:px-4 py-1.5 rounded text-xs md:text-sm font-bold flex items-center gap-2 bg-neon-900/20"><i data-lucide="download" width="16"></i> <span class="hidden sm:inline">EXPORT</span></button>
                 </div>
             </div>
 
-            <!-- MAIN WORKSPACE -->
-            <div class="flex-1 flex overflow-hidden mx-2 mb-2 gap-2 relative z-10">
-                
-                <!-- LEFT: NAVIGATION -->
-                <div class="w-64 glass-panel flex flex-col rounded-b-lg">
-                    <div class="p-3 border-b border-white/10 text-[10px] font-mono text-neon-600 tracking-widest flex justify-between items-center bg-black/20">
-                        <span>SECTOR NAV</span>
-                        <span id="total-pages" class="text-white">0</span>
+            <!-- WORKSPACE -->
+            <div class="flex-1 flex overflow-hidden relative z-0">
+                <div id="left-sidebar" class="sidebar-transition fixed md:static left-0 top-14 md:top-auto bottom-0 z-50 w-64 glass-panel border-r border-white/10 transform -translate-x-full md:translate-x-0 flex flex-col shrink-0 transform-gpu">
+                    <div class="flex border-b border-white/10 text-xs font-mono">
+                        <button onclick="setLeftTab('pages')" id="tab-btn-pages" class="flex-1 py-2 text-neon-400 border-b-2 border-neon-400 bg-white/5 flex items-center justify-center gap-1">PAGES <span id="total-pages" class="text-[10px] opacity-60">(0)</span></button>
+                        <button onclick="setLeftTab('layers')" id="tab-btn-layers" class="flex-1 py-2 text-slate-500 hover:text-white">LAYERS</button>
+                        <button onclick="setLeftTab('sigs')" id="tab-btn-sigs" class="flex-1 py-2 text-slate-500 hover:text-white">SIGS</button>
                     </div>
-                    <div id="thumbnails-container" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                        <!-- Thumbnails -->
-                    </div>
+                    <div id="tab-pages" class="flex-1 flex flex-col overflow-hidden"><div class="flex-1 overflow-y-auto p-4 custom-scrollbar text-center" id="thumbnails-container"></div><div class="p-3 border-t border-white/10"><button onclick="addNewPage()" class="cyber-btn w-full py-2 text-xs flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="14"></i> ADD PAGE</button></div></div>
+                    <div id="tab-layers" class="flex-1 flex flex-col overflow-hidden hidden"><div id="layers-list" class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar"></div><div class="p-2 text-[10px] text-slate-500 text-center border-t border-white/5">Use arrows to reorder</div></div>
+                    <div id="tab-sigs" class="flex-1 flex flex-col overflow-hidden hidden"><div id="signatures-list" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar"></div><div class="p-3 border-t border-white/10"><button onclick="openSignatureModal()" class="cyber-btn w-full py-2 text-xs flex items-center justify-center gap-2"><i data-lucide="feather" width="14"></i> NEW SIGNATURE</button></div></div>
                 </div>
 
-                <!-- CENTER: VIEWSCREEN -->
-                <div class="flex-1 relative rounded-lg border border-white/10 overflow-hidden bg-black/60 flex flex-col">
-                    <div class="absolute top-0 left-0 p-2 z-20 pointer-events-none">
-                         <div class="text-[10px] font-mono text-neon-600">VIEWPORT::ACTIVE</div>
-                         <div class="text-[10px] font-mono text-slate-600" id="canvas-coords">X:0 Y:0</div>
+                <div class="flex-1 overflow-hidden relative flex flex-col select-none w-full z-0">
+                    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center bg-black/60 backdrop-blur rounded-full px-3 py-1 border border-white/10 shadow-lg pointer-events-none">
+                        <i data-lucide="move" width="12" class="text-neon-400 mr-2"></i>
+                        <span class="text-[10px] text-slate-400 font-mono hidden sm:inline">DRAG TO PAN • PINCH TO ZOOM</span>
+                        <span id="zoom-disp" class="text-xs font-mono w-12 text-center text-white border-l border-white/10 ml-2 pl-2">100%</span>
                     </div>
-
-                    <div id="workspace" class="flex-1 overflow-auto flex items-center justify-center p-8 relative">
-                        <div id="canvas-wrapper" class="relative shadow-2xl transition-transform ease-out duration-200 bg-white">
-                            <canvas id="pdf-render" class="block"></canvas>
-                            <canvas id="drawing-layer" class="hidden absolute inset-0"></canvas>
-                            <div id="overlay-layer" class="absolute inset-0 overflow-hidden z-10"></div>
+                    <div id="workspace" class="flex-1 relative cursor-grab active:cursor-grabbing touch-none w-full h-full">
+                        <div id="pan-container" class="absolute top-0 left-0">
+                            <div id="canvas-wrapper" class="relative shadow-2xl bg-white/5 transition-shadow duration-300">
+                                <div id="page-bg-layer" class="absolute inset-0 z-0 bg-white transition-colors duration-200"></div>
+                                <canvas id="pdf-render" class="block relative z-10 mix-blend-multiply"></canvas>
+                                <!-- Drawing canvas is now only for temporary strokes -->
+                                <canvas id="drawing-layer" class="absolute inset-0 touch-none z-20"></canvas>
+                                <div id="overlay-layer" class="absolute inset-0 overflow-hidden z-30"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- RIGHT: PROPERTIES -->
-                <div class="w-72 glass-panel flex flex-col rounded-b-lg">
-                    
-                    <!-- Props Header -->
-                    <div class="p-3 border-b border-white/10 text-[10px] font-mono text-neon-600 tracking-widest bg-black/20">
-                        MODULE CONTROLS
-                    </div>
-
-                    <!-- Dynamic Properties -->
-                    <div class="flex-1 overflow-y-auto">
-                        <div id="props-empty" class="h-40 flex flex-col items-center justify-center text-slate-600 opacity-50">
-                            <i data-lucide="cpu" width="32" class="mb-2 animate-pulse"></i>
-                            <span class="text-xs font-mono">NO MODULE SELECTED</span>
+                <div id="right-sidebar" class="sidebar-transition fixed md:static right-0 top-14 md:top-auto bottom-0 z-50 w-72 glass-panel border-l border-white/10 transform translate-x-full md:translate-x-0 hidden md:flex flex-col shrink-0 transform-gpu">
+                    <div class="p-3 border-b border-white/10 flex justify-between items-center bg-black/30"><span class="text-xs font-mono text-neon-400 tracking-widest">PROPERTIES</span><button onclick="toggleSidebar('right')" class="md:hidden text-slate-400 p-2"><i data-lucide="x" width="16"></i></button></div>
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
+                        <div id="draw-props" class="hidden p-2 space-y-4 border-b border-white/10 pb-4 mb-4">
+                            <div class="text-[10px] text-neon-600 font-mono uppercase tracking-widest">DRAW SETTINGS</div>
+                            <div class="space-y-2"><label class="text-[10px] text-slate-400 font-mono">Brush Color</label><div class="flex gap-2"><input type="color" id="draw-color-picker" value="#00f3ff" class="w-8 h-8 rounded border-none cursor-pointer" onchange="state.drawColor = this.value"></div></div>
+                            <div class="space-y-2"><label class="text-[10px] text-slate-400 font-mono">Brush Size</label><input type="range" min="1" max="20" value="2" class="w-full accent-neon-400 h-1 bg-slate-700 rounded" oninput="state.drawWidth = parseInt(this.value)"></div>
                         </div>
-
-                        <div id="props-content" class="hidden p-4 space-y-5">
-                            <!-- Contextual Controls -->
+                        <div id="props-empty" class="h-20 flex flex-col items-center justify-center text-slate-500 opacity-60"><span class="text-xs font-mono">NO ELEMENT SELECTED</span></div>
+                        <div id="props-content" class="hidden p-2 space-y-5">
                             <div class="space-y-2" id="prop-color-group">
-                                <label class="text-[10px] text-neon-600 font-mono uppercase">Emission Color</label>
+                                <label class="text-[10px] text-neon-600 font-mono uppercase">Selection/Box Color</label>
                                 <div class="flex gap-2">
                                     <input type="color" id="prop-color" class="w-8 h-8 rounded bg-transparent border border-white/20 cursor-pointer" onchange="updateProp('color', this.value)">
                                     <input type="text" id="prop-color-hex" class="flex-1 bg-black/40 border border-white/10 rounded px-2 text-xs font-mono text-neon-400" onchange="updateProp('color', this.value)">
                                 </div>
                             </div>
-
-                            <div id="prop-text-group" class="space-y-4 hidden">
-                                <div class="space-y-2">
-                                   <label class="text-[10px] text-neon-600 font-mono uppercase">Font Scale</label>
-                                   <div class="flex items-center gap-2">
-                                       <input type="range" min="8" max="72" id="prop-size-slider" class="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-neon-500" oninput="updateProp('fontSize', parseInt(this.value))">
-                                       <span id="prop-size-val" class="text-xs font-mono text-white w-6">16</span>
-                                   </div>
-                               </div>
-                               <div class="space-y-2">
-                                   <label class="text-[10px] text-neon-600 font-mono uppercase">Typeface</label>
-                                   <select id="prop-font" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-white font-mono" onchange="updateProp('fontFamily', this.value)">
-                                       <option value="Helvetica">HELVETICA (STD)</option>
-                                       <option value="Times-Roman">TIMES (SERIF)</option>
-                                       <option value="Courier">COURIER (CODE)</option>
-                                   </select>
-                               </div>
-                           </div>
-
-                           <div class="space-y-2">
-                                <label class="text-[10px] text-neon-600 font-mono uppercase">Opacity Field</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="range" min="0" max="1" step="0.1" id="prop-opacity" class="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-neon-500" oninput="updateProp('opacity', parseFloat(this.value))">
-                                    <span id="prop-opacity-val" class="text-xs font-mono text-white w-6">1.0</span>
+                            <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Opacity</label><div class="flex items-center gap-2"><input type="range" min="0" max="1" step="0.1" id="prop-opacity" class="flex-1 h-1 bg-slate-700 rounded-lg accent-neon-500" oninput="updateProp('opacity', parseFloat(this.value))"><span id="prop-opacity-val" class="text-xs font-mono text-white w-8 text-right">1.0</span></div></div>
+                            
+                            <!-- BORDER CONTROLS -->
+                            <div class="space-y-2 border-t border-white/10 pt-2">
+                                <label class="text-[10px] text-neon-600 font-mono uppercase">Border Settings</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="col-span-2 flex gap-2">
+                                         <input type="color" id="prop-border-color" class="w-8 h-8 rounded border-none cursor-pointer" onchange="updateProp('borderColor', this.value)">
+                                         <select id="prop-border-style" class="flex-1 bg-black/40 border border-white/10 rounded px-2 text-xs text-slate-300" onchange="updateProp('borderStyle', this.value)">
+                                             <option value="none">None</option>
+                                             <option value="solid">Solid</option>
+                                             <option value="dashed">Dashed</option>
+                                             <option value="dotted">Dotted</option>
+                                             <option value="double">Double</option>
+                                         </select>
+                                    </div>
+                                    <div class="flex items-center gap-1" title="Border Width"><span class="text-[8px] text-slate-400">W</span><input type="range" id="prop-border-width" min="0" max="20" class="flex-1 h-1 bg-slate-700 rounded accent-neon-500" oninput="updateProp('borderWidth', parseInt(this.value))"></div>
+                                    <div class="flex items-center gap-1" title="Border Radius (Shape)"><span class="text-[8px] text-slate-400">R</span><input type="range" id="prop-border-radius" min="0" max="50" class="flex-1 h-1 bg-slate-700 rounded accent-neon-500" oninput="updateProp('borderRadius', parseInt(this.value))"></div>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
-                                <button onclick="duplicateSelected()" class="cyber-btn py-2 text-[10px]">CLONE</button>
-                                <button onclick="deleteSelected()" class="cyber-btn py-2 text-[10px] text-alert-500 border-alert-500/50">PURGE</button>
+                            <div id="prop-text-group" class="space-y-4 hidden border-t border-white/10 pt-2">
+                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Text Options</label>
+                                    <div class="flex gap-2">
+                                        <button onclick="toggleTextStyle('bold')" id="btn-bold" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20 font-bold text-xs">B</button>
+                                        <button onclick="toggleTextStyle('italic')" id="btn-italic" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20 italic text-xs">I</button>
+                                        <button onclick="toggleTextStyle('underline')" id="btn-underline" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20 underline text-xs">U</button>
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <button onclick="updateProp('textAlign', 'left')" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20"><i data-lucide="align-left" width="14" class="mx-auto"></i></button>
+                                        <button onclick="updateProp('textAlign', 'center')" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20"><i data-lucide="align-center" width="14" class="mx-auto"></i></button>
+                                        <button onclick="updateProp('textAlign', 'right')" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20"><i data-lucide="align-right" width="14" class="mx-auto"></i></button>
+                                    </div>
+                                </div>
+                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Font Size</label><div class="flex items-center gap-2"><input type="range" min="8" max="120" id="prop-size-slider" class="flex-1 h-1 bg-slate-700 rounded-lg accent-neon-500" oninput="updateProp('fontSize', parseInt(this.value))"><span id="prop-size-val" class="text-xs font-mono text-white w-8 text-right">16</span></div></div>
+                                <div class="space-y-2">
+                                    <label class="text-[10px] text-neon-600 font-mono uppercase">Font Family</label>
+                                    <select id="prop-font" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-white font-mono" onchange="updateProp('fontFamily', this.value)">
+                                        <option value="Helvetica">Helvetica (Standard)</option>
+                                        <option value="Times-Roman">Times New Roman (Standard)</option>
+                                        <option value="Courier">Courier (Standard)</option>
+                                        <option value="Roboto">Roboto</option>
+                                        <option value="Lobster">Lobster</option>
+                                        <option value="Dancing Script">Dancing Script</option>
+                                        <option value="Oswald">Oswald</option>
+                                        <option value="'Press Start 2P'">Pixel (Press Start 2P)</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Text Background</label><div class="flex gap-2"><input type="color" id="prop-bg-color" class="w-8 h-8 rounded border-none cursor-pointer" onchange="updateProp('backgroundColor', this.value)"><button onclick="updateProp('backgroundColor', 'transparent')" class="text-[10px] text-slate-400 hover:text-white border border-white/20 px-2 rounded">Clear</button></div></div>
+                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Link URL</label><input type="text" id="prop-link" placeholder="https://..." class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('linkUrl', this.value)"></div>
                             </div>
+                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/5"><button onclick="duplicateSelected()" class="cyber-btn py-2 text-[10px]" title="Clone">DUPLICATE</button><button onclick="deleteSelected()" class="cyber-btn py-2 text-[10px] text-alert-500 border-alert-500/50" title="Remove">DELETE</button></div>
                         </div>
-                    </div>
-
-                    <!-- Page Operations -->
-                    <div class="border-t border-white/10 bg-black/20 p-4">
-                        <div class="text-[10px] font-mono text-neon-600 tracking-widest mb-3">PAGE OPERATIONS</div>
-                        <div class="grid grid-cols-2 gap-2 mb-2">
-                            <button onclick="rotatePage(-90)" class="cyber-btn py-2 flex items-center justify-center gap-1 text-[10px]"><i data-lucide="rotate-ccw" width="12"></i> ROT L</button>
-                            <button onclick="rotatePage(90)" class="cyber-btn py-2 flex items-center justify-center gap-1 text-[10px]"><i data-lucide="rotate-cw" width="12"></i> ROT R</button>
+                        <div class="mt-4 border-t border-white/10 bg-white/5 p-4 rounded">
+                            <div class="text-[10px] font-mono text-neon-600 tracking-widest mb-3">PAGE ACTIONS</div>
+                            <div class="space-y-2 mb-3"><label class="text-[10px] text-slate-400 font-mono">Background Color</label><input type="color" id="page-bg-color" value="#ffffff" class="w-full h-8 rounded border-none cursor-pointer" oninput="updatePageBg(this.value)" onchange="addToHistory()"></div>
+                            <!-- PAGE BORDER CONTROLS -->
+                            <div class="space-y-2 mb-3 pt-2 border-t border-white/5">
+                                <label class="text-[10px] text-slate-400 font-mono">Page Border</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="col-span-2 flex gap-2">
+                                         <input type="color" id="page-border-color" class="w-8 h-8 rounded border-none cursor-pointer" onchange="updatePageProp('borderColor', this.value)">
+                                         <select id="page-border-style" class="flex-1 bg-black/40 border border-white/10 rounded px-2 text-xs text-slate-300" onchange="updatePageProp('borderStyle', this.value)">
+                                             <option value="none">None</option>
+                                             <option value="solid">Solid</option>
+                                             <option value="dashed">Dashed</option>
+                                             <option value="dotted">Dotted</option>
+                                             <option value="double">Double</option>
+                                         </select>
+                                    </div>
+                                    <div class="flex items-center gap-1 col-span-2"><span class="text-[8px] text-slate-400">Width</span><input type="range" id="page-border-width" min="0" max="50" class="flex-1 h-1 bg-slate-700 rounded accent-neon-500" oninput="updatePageProp('borderWidth', parseInt(this.value))"></div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 mb-2"><button onclick="rotatePage(-90)" class="cyber-btn py-2 flex items-center justify-center gap-1 text-[10px]"><i data-lucide="rotate-ccw" width="12"></i> LEFT</button><button onclick="rotatePage(90)" class="cyber-btn py-2 flex items-center justify-center gap-1 text-[10px]"><i data-lucide="rotate-cw" width="12"></i> RIGHT</button></div>
+                            <button onclick="deleteCurrentPage()" class="cyber-btn w-full py-2 text-alert-500 border-alert-500/30 text-[10px] flex items-center justify-center gap-2 hover:bg-alert-500/10"><i data-lucide="trash" width="12"></i> DELETE PAGE</button>
                         </div>
-                        <button onclick="deleteCurrentPage()" class="cyber-btn w-full py-2 text-alert-500 border-alert-500/30 text-[10px] flex items-center justify-center gap-2 hover:bg-alert-500/10">
-                            <i data-lucide="trash" width="12"></i> DELETE SECTOR
-                        </button>
-                    </div>
-
-                    <!-- Decorative Footer -->
-                    <div class="p-2 border-t border-white/5 text-[9px] font-mono text-slate-600 text-center">
-                        SYS.ID: OMNI-2049 // ONLINE
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- LOGIC -->
     <script>
-        // --- 1. THREE.JS SPACE BACKGROUND ---
-        function initSpaceBackground() {
-            const container = document.getElementById('bg-canvas');
-            const scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x050505, 0.002);
-
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 50;
-
-            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            container.appendChild(renderer.domElement);
-
-            // Stars
-            const starGeo = new THREE.BufferGeometry();
-            const starCount = 6000;
-            const posArray = new Float32Array(starCount * 3);
-            for(let i=0; i<starCount*3; i++) {
-                posArray[i] = (Math.random() - 0.5) * 600;
-            }
-            starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-            const starMat = new THREE.PointsMaterial({ size: 0.2, color: 0xffffff });
-            const starMesh = new THREE.Points(starGeo, starMat);
-            scene.add(starMesh);
-
-            // Asteroids (Low Poly)
-            const asteroidGeo = new THREE.IcosahedronGeometry(1, 0);
-            const asteroidMat = new THREE.MeshLambertMaterial({ color: 0x445566, wireframe: true });
-            const asteroids = [];
-
-            for(let i=0; i<15; i++) {
-                const asteroid = new THREE.Mesh(asteroidGeo, asteroidMat);
-                asteroid.position.set(
-                    (Math.random() - 0.5) * 100,
-                    (Math.random() - 0.5) * 100,
-                    (Math.random() - 0.5) * 50
-                );
-                asteroid.scale.setScalar(Math.random() * 2 + 1);
-                asteroid.userData = { 
-                    rotSpeed: { x: Math.random()*0.02, y: Math.random()*0.02 },
-                    vel: { x: (Math.random()-0.5)*0.05, y: (Math.random()-0.5)*0.05 }
-                };
-                scene.add(asteroid);
-                asteroids.push(asteroid);
-            }
-
-            // Lights
-            const ambientLight = new THREE.AmbientLight(0x404040);
-            scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0x00f3ff, 0.5);
-            dirLight.position.set(1, 1, 1);
-            scene.add(dirLight);
-
-            // Mouse Interaction
-            let mouseX = 0;
-            let mouseY = 0;
-            document.addEventListener('mousemove', (e) => {
-                mouseX = (e.clientX - window.innerWidth/2) * 0.05;
-                mouseY = (e.clientY - window.innerHeight/2) * 0.05;
-                
-                // Update UI coords
-                const coords = document.getElementById('canvas-coords');
-                if(coords) coords.innerText = `X:${e.clientX} Y:${e.clientY}`;
-            });
-
-            function animate() {
-                requestAnimationFrame(animate);
-
-                // Subtle Camera Move
-                camera.position.x += (mouseX - camera.position.x) * 0.05;
-                camera.position.y += (-mouseY - camera.position.y) * 0.05;
-                camera.lookAt(scene.position);
-
-                // Move Stars (Warp effect)
-                starMesh.rotation.z += 0.0005;
-
-                // Move Asteroids
-                asteroids.forEach(a => {
-                    a.rotation.x += a.userData.rotSpeed.x;
-                    a.rotation.y += a.userData.rotSpeed.y;
-                    a.position.x += a.userData.vel.x;
-                    a.position.y += a.userData.vel.y;
-                    // Loop
-                    if(a.position.x > 50) a.position.x = -50;
-                    if(a.position.x < -50) a.position.x = 50;
-                });
-
-                renderer.render(scene, camera);
-            }
-            animate();
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-        }
-        initSpaceBackground();
-
-
-        // --- 2. OMNI-PDF CORE LOGIC ---
-        // (Re-implementing the robust logic from v2.0)
+        // --- 1. GLOBAL VARIABLES & STATE ---
+        var canvas = document.getElementById('pdf-render');
+        var ctx = canvas.getContext('2d');
+        var drawCanvas = document.getElementById('drawing-layer');
+        var drawCtx = drawCanvas.getContext('2d');
+        var overlay = document.getElementById('overlay-layer');
+        var canvasWrapper = document.getElementById('canvas-wrapper');
         
-        const state = {
-            pdfDoc: null, pdfBytes: null, scale: 1.0, currentPage: 1, tool: 'select',
-            pages: [], elements: [], drawings: [],
-            history: [], historyIndex: -1, selectedId: null
+        var state = {
+            pdfDoc: null, pdfBytes: null, currentViewport: null, renderTask: null,
+            scale: 1.5, zoom: 1.0, pan: { x: 0, y: 0 },
+            currentPage: 1, tool: 'select',
+            pages: [], elements: [], history: [], historyStep: -1,
+            selectedId: null, isEditingText: false,
+            drawColor: '#00f3ff', drawWidth: 2
         };
+        var savedSignatures = JSON.parse(localStorage.getItem('omni_signatures') || '[]');
+        var dragAction = null, isPanning = false, panStart = {x:0, y:0}, isDrawing = false, currentPath = null;
 
-        const canvas = document.getElementById('pdf-render');
-        const ctx = canvas.getContext('2d');
-        const drawCanvas = document.getElementById('drawing-layer');
-        const drawCtx = drawCanvas.getContext('2d');
-        const overlay = document.getElementById('overlay-layer');
+        // --- 2. FUNCTION DECLARATIONS ---
 
-        // Init
-        document.getElementById('file-input').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        function initIcons() { lucide.createIcons(); }
+        function createId() { return 'EL-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+        function hexToRgb(hex) { if(!hex || hex === 'transparent') return undefined; const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); const {rgb}=PDFLib; return r?rgb(parseInt(r[1],16)/255, parseInt(r[2],16)/255, parseInt(r[3],16)/255):rgb(0,0,0); }
+        function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.classList.remove('translate-y-20', 'opacity-0'); setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 2000); }
 
-            const btn = document.getElementById('init-btn');
-            btn.innerHTML = '<span class="animate-pulse">DECRYPTING...</span>';
-            
-            try {
-                const buffer = await file.arrayBuffer();
-                state.pdfBytes = buffer.slice(0);
-                state.pdfDoc = await pdfjsLib.getDocument(buffer).promise;
-                state.pages = Array.from({ length: state.pdfDoc.numPages }, (_, i) => ({ index: i + 1, rotation: 0, deleted: false }));
-                
-                // Animation Transition
-                const splash = document.getElementById('upload-screen');
-                splash.style.opacity = '0';
-                setTimeout(() => {
-                    splash.classList.add('hidden');
-                    const dash = document.getElementById('dashboard');
-                    dash.classList.remove('hidden');
-                    // Small delay to trigger opacity transition
-                    requestAnimationFrame(() => dash.style.opacity = '1');
-                }, 500);
-
-                document.getElementById('total-pages').innerText = state.pdfDoc.numPages;
-                renderThumbnails();
-                loadPage(1);
-                saveHistory();
-                
-            } catch (err) {
-                console.error(err);
-                alert("SYSTEM ERROR: " + err.message);
-                btn.innerHTML = 'RETRY INIT';
-            }
-        });
-
-        // History
-        function saveHistory() {
-            const snapshot = {
-                pages: JSON.parse(JSON.stringify(state.pages)),
-                elements: JSON.parse(JSON.stringify(state.elements)),
-                drawings: JSON.parse(JSON.stringify(state.drawings))
-            };
-            if (state.historyIndex < state.history.length - 1) {
-                state.history = state.history.slice(0, state.historyIndex + 1);
-            }
-            state.history.push(snapshot);
-            state.historyIndex++;
-        }
-        function undo() {
-            if (state.historyIndex > 0) {
-                state.historyIndex--;
-                restoreState(state.history[state.historyIndex]);
-            }
-        }
-        function redo() {
-            if (state.historyIndex < state.history.length - 1) {
-                state.historyIndex++;
-                restoreState(state.history[state.historyIndex]);
-            }
-        }
-        function restoreState(snapshot) {
-            state.pages = JSON.parse(JSON.stringify(snapshot.pages));
-            state.elements = JSON.parse(JSON.stringify(snapshot.elements));
-            state.drawings = JSON.parse(JSON.stringify(snapshot.drawings));
-            state.selectedId = null;
-            renderThumbnails();
-            loadPage(state.currentPage);
-            updatePropsPanel();
+        function initDrag(e, el, type) {
+            e.preventDefault();
+            const cx = e.touches ? e.touches[0].clientX : e.clientX;
+            const cy = e.touches ? e.touches[0].clientY : e.clientY;
+            dragAction = { type, el, startX: cx, startY: cy, origX: el.x, origY: el.y, origW: el.width, origH: el.height };
         }
 
-        // Render
-        async function loadPage(num) {
-            const pageData = state.pages[num - 1];
-            if (pageData.deleted) {
-                const valid = state.pages.find(p => !p.deleted);
-                if(valid) return loadPage(valid.index);
-                return;
+        function handleMove(cx, cy) {
+            const dx = (cx - dragAction.startX) / state.zoom;
+            const dy = (cy - dragAction.startY) / state.zoom;
+            if(dragAction.type === 'move') { dragAction.el.x = dragAction.origX + dx; dragAction.el.y = dragAction.origY + dy; }
+            else if (dragAction.type === 'resize') {
+                let newW = Math.max(20, dragAction.origW + dx), newH = Math.max(20, dragAction.origH + dy);
+                if(dragAction.el.subtype === 'signature' || dragAction.el.aspectRatio) {
+                    const ratio = dragAction.el.aspectRatio || (dragAction.origW / dragAction.origH);
+                    if(Math.abs(dx) > Math.abs(dy)) newH = newW / ratio; else newW = newH * ratio;
+                }
+                dragAction.el.width = newW; dragAction.el.height = newH;
             }
-            state.currentPage = num;
-            
-            // Thumbnails UI
-            document.querySelectorAll('.thumbnail').forEach(el => {
-                const active = parseInt(el.dataset.page) === num;
-                el.style.borderColor = active ? '#00f3ff' : 'rgba(255,255,255,0.1)';
-                el.style.boxShadow = active ? '0 0 10px rgba(0,243,255,0.3)' : 'none';
-            });
-
-            const page = await state.pdfDoc.getPage(num);
-            const rotation = (page.rotate + pageData.rotation) % 360;
-            const viewport = page.getViewport({ scale: state.scale, rotation: rotation });
-
-            canvas.width = viewport.width; canvas.height = viewport.height;
-            drawCanvas.width = viewport.width; drawCanvas.height = viewport.height;
-            
-            document.getElementById('canvas-wrapper').style.width = viewport.width + 'px';
-            document.getElementById('canvas-wrapper').style.height = viewport.height + 'px';
-
-            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
             renderElements();
-            renderDrawings();
         }
 
-        function renderThumbnails() {
-            const container = document.getElementById('thumbnails-container');
-            container.innerHTML = '';
-            state.pages.forEach(p => {
-                if (p.deleted) return;
-                const div = document.createElement('div');
-                div.className = 'thumbnail aspect-[3/4] bg-black/40 rounded border border-white/10 cursor-pointer relative overflow-hidden group transition-all duration-200';
-                div.dataset.page = p.index;
-                div.onclick = () => loadPage(p.index);
-                
-                div.innerHTML = `
-                    <div class="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40">
-                        <i data-lucide="file-text" width="32" class="text-neon-500"></i>
-                    </div>
-                    <div class="absolute bottom-1 right-1 bg-black/60 text-neon-400 text-[9px] px-1 rounded font-mono border border-neon-900">
-                        PG-${p.index.toString().padStart(2, '0')}
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-            lucide.createIcons();
+        function getDrawCoords(e) {
+            const rect = drawCanvas.getBoundingClientRect();
+            const cx = e.touches ? e.touches[0].clientX : e.clientX;
+            const cy = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: (cx - rect.left) * (drawCanvas.width / rect.width), y: (cy - rect.top) * (drawCanvas.height / rect.height) };
         }
 
-        // Zoom
-        function zoom(delta) {
-            state.scale = Math.max(0.5, Math.min(3.0, state.scale + delta));
-            document.getElementById('zoom-disp').innerText = Math.round(state.scale * 100) + '%';
-            loadPage(state.currentPage);
+        function startDraw(e) {
+            if(state.tool !== 'draw') return;
+            e.preventDefault(); isDrawing = true;
+            const c = getDrawCoords(e);
+            currentPath = { color: state.drawColor, width: state.drawWidth, points: [c] };
+            drawCtx.beginPath(); drawCtx.moveTo(c.x, c.y); drawCtx.strokeStyle = state.drawColor; drawCtx.lineWidth = state.drawWidth; drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
         }
 
-        // Page Ops
-        function rotatePage(deg) {
-            const p = state.pages[state.currentPage - 1];
-            p.rotation = (p.rotation + deg) % 360;
-            loadPage(state.currentPage);
-            saveHistory();
+        function draw(e) {
+            if(!isDrawing || state.tool !== 'draw') return;
+            e.preventDefault(); const c = getDrawCoords(e);
+            currentPath.points.push(c); drawCtx.lineTo(c.x, c.y); drawCtx.stroke();
         }
-        function deleteCurrentPage() {
-            if(confirm("CONFIRM SECTOR PURGE?")) {
-                state.pages[state.currentPage - 1].deleted = true;
-                const next = state.pages.find(p => !p.deleted);
-                if(next) loadPage(next.index);
-                renderThumbnails();
-                saveHistory();
+
+        function endDraw() {
+            if(!isDrawing) return; isDrawing = false;
+            drawCtx.clearRect(0,0,drawCanvas.width, drawCanvas.height);
+            if(currentPath && currentPath.points.length > 1) {
+                const xs = currentPath.points.map(p => p.x);
+                const ys = currentPath.points.map(p => p.y);
+                const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+                const w = Math.max(20, maxX - minX), h = Math.max(20, maxY - minY);
+                const normPoints = currentPath.points.map(p => ({ x: p.x - minX, y: p.y - minY }));
+                const newEl = {
+                    id: createId(), type: 'draw', page: state.currentPage,
+                    x: minX, y: minY, width: w, height: h, originalWidth: w, originalHeight: h,
+                    points: normPoints, color: currentPath.color, strokeWidth: currentPath.width, opacity: 1
+                };
+                state.elements.push(newEl); selectElement(newEl.id); renderElements(); addToHistory();
+            }
+            currentPath = null;
+        }
+
+        function updatePropsPanel() {
+            const panel = document.getElementById('props-content'), empty = document.getElementById('props-empty'), el = state.elements.find(e => e.id === state.selectedId);
+            const pageData = state.pages[state.currentPage - 1];
+
+            // Page Props
+            if(pageData) {
+                document.getElementById('page-border-color').value = pageData.borderColor || '#000000';
+                document.getElementById('page-border-style').value = pageData.borderStyle || 'none';
+                document.getElementById('page-border-width').value = pageData.borderWidth || 0;
+            }
+
+            if(!el) { panel.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+            panel.classList.remove('hidden'); empty.classList.add('hidden');
+            
+            if(el.color) { document.getElementById('prop-color').value = el.color; document.getElementById('prop-color-hex').value = el.color; }
+            document.getElementById('prop-opacity').value = el.opacity || 1;
+            document.getElementById('prop-opacity-val').innerText = el.opacity || 1;
+            
+            // Border Props
+            document.getElementById('prop-border-color').value = el.borderColor || '#000000';
+            document.getElementById('prop-border-style').value = el.borderStyle || 'none';
+            document.getElementById('prop-border-width').value = el.borderWidth || 0;
+            document.getElementById('prop-border-radius').value = el.borderRadius || 0;
+
+            if(el.type === 'text') { 
+                document.getElementById('prop-text-group').classList.remove('hidden'); 
+                document.getElementById('prop-size-slider').value = el.fontSize; 
+                document.getElementById('prop-size-val').innerText = el.fontSize; 
+                document.getElementById('prop-font').value = el.fontFamily; 
+                document.getElementById('prop-bg-color').value = el.backgroundColor || '#ffffff';
+                document.getElementById('prop-link').value = el.linkUrl || '';
+            } else { 
+                document.getElementById('prop-text-group').classList.add('hidden'); 
             }
         }
 
-        // Elements
-        function createId() { return 'EL-' + Date.now().toString(36).toUpperCase(); }
-        function addElement(type, content = null) {
-            const base = {
-                id: createId(), page: state.currentPage, x: 50, y: 50,
-                width: 150, height: 50, opacity: 1
-            };
-            if(type === 'text') {
-                Object.assign(base, { type: 'text', content: 'INPUT DATA', fontSize: 16, fontFamily: 'Helvetica', color: '#00f3ff', width: 200, height: 30 });
-            } else if(type === 'rect') {
-                Object.assign(base, { type: 'rect', color: '#000000', width: 100, height: 50 });
-            } else if(type === 'highlight') {
-                Object.assign(base, { type: 'rect', color: '#fef08a', opacity: 0.4, width: 200, height: 20 });
-            } else if(type === 'image') {
-                Object.assign(base, { type: 'image', content: content, width: 150, height: 150 });
-            }
-            state.elements.push(base);
-            selectElement(base.id);
-            renderElements();
-            saveHistory();
-        }
-        function addText() { addElement('text'); }
-        function addRect() { addElement('rect'); }
-        function addHighlight() { addElement('highlight'); }
-        
-        function addStamp(text, color) {
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"><rect x="5" y="5" width="190" height="70" rx="10" ry="10" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="10,5"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Courier" font-weight="bold" font-size="30" fill="${color}">${text}</text></svg>`;
-            const img = new Image();
-            img.onload = () => addElement('image', img.src);
-            img.src = 'data:image/svg+xml;base64,' + btoa(svg);
-        }
-
-        function triggerImageUpload() { document.getElementById('img-upload').click(); }
-        document.getElementById('img-upload').addEventListener('change', function(e){
-            if(this.files[0]) {
-                const r = new FileReader();
-                r.onload = (evt) => addElement('image', evt.target.result);
-                r.readAsDataURL(this.files[0]);
-            }
-            this.value = '';
-        });
-
-        // Rendering Elements
         function renderElements() {
             overlay.innerHTML = '';
             const pageEls = state.elements.filter(el => el.page === state.currentPage);
             pageEls.forEach(el => {
                 const div = document.createElement('div');
                 div.className = `overlay-el ${state.selectedId === el.id ? 'selected' : ''}`;
-                div.style.left = el.x + 'px'; div.style.top = el.y + 'px';
-                div.style.width = el.width + 'px'; div.style.height = el.height + 'px';
-                div.style.opacity = el.opacity;
+                if(state.isEditingText && state.selectedId === el.id) div.classList.add('editing');
+                div.style.left = el.x + 'px'; div.style.top = el.y + 'px'; div.style.width = el.width + 'px'; div.style.height = el.height + 'px'; div.style.opacity = el.opacity;
                 
-                if(el.type === 'text') {
-                    const ta = document.createElement('textarea');
-                    ta.className = 'w-full h-full bg-transparent border-none outline-none resize-none p-0 overflow-hidden';
-                    ta.value = el.content;
-                    ta.style.fontSize = el.fontSize + 'px';
-                    ta.style.fontFamily = el.fontFamily;
-                    ta.style.color = el.color;
-                    ta.readOnly = state.selectedId !== el.id;
-                    ta.oninput = (e) => el.content = e.target.value;
-                    if(state.selectedId === el.id) setTimeout(() => ta.focus(), 0);
-                    div.appendChild(ta);
-                } else if(el.type === 'rect') {
-                    div.style.backgroundColor = el.color;
-                    if(state.selectedId !== el.id) div.style.border = '1px solid rgba(255,255,255,0.2)';
-                } else if(el.type === 'image') {
-                    const img = document.createElement('img');
-                    img.src = el.content;
-                    img.className = 'w-full h-full object-contain pointer-events-none';
-                    div.appendChild(img);
+                // Border Styling
+                if (el.borderStyle && el.borderStyle !== 'none') {
+                    div.style.borderStyle = el.borderStyle;
+                    div.style.borderWidth = (el.borderWidth || 1) + 'px';
+                    div.style.borderColor = el.borderColor || '#000';
+                    div.style.borderRadius = (el.borderRadius || 0) + 'px';
                 }
 
-                if(state.selectedId === el.id) {
-                    const handle = document.createElement('div');
-                    handle.className = 'resize-handle';
-                    handle.style.bottom = '-6px'; handle.style.right = '-6px';
-                    handle.onmousedown = (e) => startResize(e, el);
+                if(el.type === 'text') {
+                    const shield = document.createElement('div'); shield.className = 'text-shield';
+                    shield.ondblclick = (e) => { e.stopPropagation(); e.preventDefault(); state.isEditingText = true; renderElements(); };
+                    div.appendChild(shield);
+                    
+                    const ta = document.createElement('div'); 
+                    ta.className = 'text-content-area'; 
+                    ta.innerHTML = el.content;
+                    ta.contentEditable = (state.selectedId === el.id && state.isEditingText);
+                    
+                    ta.style.fontSize = el.fontSize + 'px'; 
+                    ta.style.fontFamily = el.fontFamily; 
+                    ta.style.color = el.color; 
+                    ta.style.lineHeight = '1.2';
+                    ta.style.textAlign = el.textAlign || 'left';
+                    
+                    // Basic styles fallback for entire box if no selection
+                    if(el.isBold) ta.style.fontWeight = 'bold';
+                    if(el.isItalic) ta.style.fontStyle = 'italic';
+                    if(el.isUnderline) ta.style.textDecoration = 'underline';
+                    if (el.backgroundColor) ta.style.backgroundColor = el.backgroundColor;
+                    if(el.isStamp) { ta.style.border = `3px solid ${el.color}`; ta.style.borderRadius = '4px'; ta.style.fontWeight = 'bold'; ta.style.textAlign = 'center'; ta.style.paddingTop = '5px'; }
+                    
+                    ta.oninput = (e) => { 
+                        el.content = e.target.innerHTML;
+                        requestAnimationFrame(() => {
+                            el.width = Math.max(50, ta.scrollWidth + 10);
+                            el.height = Math.max(el.fontSize, ta.scrollHeight);
+                            div.style.width = el.width + 'px'; div.style.height = el.height + 'px';
+                        });
+                    };
+                    ta.onblur = () => { state.isEditingText = false; renderElements(); addToHistory(); };
+                    div.appendChild(ta); 
+                    if(state.isEditingText && state.selectedId === el.id) setTimeout(() => ta.focus(), 10);
+                } 
+                else if(el.type === 'rect') { div.style.backgroundColor = el.color; }
+                else if(el.type === 'image') { 
+                    const img = document.createElement('img'); img.src = el.content; img.className = 'w-full h-full object-contain pointer-events-none'; 
+                    if(el.borderRadius) img.style.borderRadius = (el.borderRadius-2)+'px'; // adjust for border
+                    div.appendChild(img); 
+                }
+                else if (el.type === 'draw') {
+                    const cvs = document.createElement('canvas');
+                    cvs.width = el.width; cvs.height = el.height;
+                    cvs.className = 'w-full h-full pointer-events-none';
+                    const c = cvs.getContext('2d');
+                    const sx = el.width / el.originalWidth, sy = el.height / el.originalHeight;
+                    c.scale(sx, sy);
+                    c.beginPath(); c.strokeStyle = el.color; c.lineWidth = el.strokeWidth;
+                    c.lineCap = 'round'; c.lineJoin = 'round';
+                    if(el.points.length > 0) {
+                        c.moveTo(el.points[0].x, el.points[0].y);
+                        for(let i=1; i<el.points.length; i++) c.lineTo(el.points[i].x, el.points[i].y);
+                        c.stroke();
+                    }
+                    div.appendChild(cvs);
+                }
+
+                if(state.selectedId === el.id && !state.isEditingText) {
+                    const handle = document.createElement('div'); handle.className = 'resize-handle';
+                    handle.onmousedown = (e) => { e.stopPropagation(); initDrag(e, el, 'resize'); };
+                    handle.ontouchstart = (e) => { e.stopPropagation(); initDrag(e, el, 'resize'); };
                     div.appendChild(handle);
                 }
-
-                div.onmousedown = (e) => startDrag(e, el);
+                div.onmousedown = (e) => { if(state.isEditingText) return; e.stopPropagation(); if(state.selectedId !== el.id) { selectElement(el.id); renderElements(); } initDrag(e, el, 'move'); };
+                div.ontouchstart = (e) => { if(state.isEditingText) return; e.stopPropagation(); if(state.selectedId !== el.id) { selectElement(el.id); renderElements(); } initDrag(e, el, 'move'); };
                 overlay.appendChild(div);
             });
+            renderLayers();
+        }
+
+        function renderLayers() {
+            const list = document.getElementById('layers-list'); list.innerHTML = '';
+            const pageEls = state.elements.filter(e => e.page === state.currentPage);
+            [...pageEls].reverse().forEach((el) => {
+                const div = document.createElement('div');
+                div.className = `layer-item p-2 flex items-center justify-between text-xs text-slate-300 border-b border-white/5 cursor-pointer ${state.selectedId === el.id ? 'active' : ''}`;
+                div.onclick = () => { selectElement(el.id); renderElements(); };
+                let icon = 'square'; if(el.type === 'text') icon = 'type'; if(el.type === 'image') icon = 'image'; if(el.type === 'draw') icon = 'pen-tool';
+                div.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="${icon}" width="14"></i><span class="truncate w-24">${el.type.toUpperCase()}</span></div><div class="flex gap-1"><button onclick="moveLayer('${el.id}', 1)"><i data-lucide="chevron-up" width="12"></i></button><button onclick="moveLayer('${el.id}', -1)"><i data-lucide="chevron-down" width="12"></i></button><button onclick="deleteLayer('${el.id}')" class="text-alert-500"><i data-lucide="trash" width="12"></i></button></div>`;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function renderThumbnails() {
+            const container = document.getElementById('thumbnails-container'); container.innerHTML = '';
+            const activePages = state.pages.filter(p => !p.deleted).length;
+            document.getElementById('total-pages').innerText = `(${activePages})`;
+            for(let i=1; i<=state.pdfDoc.numPages; i++) {
+                if(state.pages[i-1].deleted) continue;
+                const pageData = state.pages[i-1];
+                const page = await state.pdfDoc.getPage(i);
+                const totalRotation = (page.rotate + pageData.rotation) % 360;
+                const unscaledVp = page.getViewport({ scale: 1, rotation: totalRotation });
+                const scale = 140 / unscaledVp.width;
+                const vp = page.getViewport({ scale: scale, rotation: totalRotation });
+                
+                const div = document.createElement('div');
+                div.className = `thumbnail cursor-pointer mb-4 mx-auto shadow-lg relative group transition-all duration-200 ${state.currentPage === i ? 'ring-2 ring-neon-400' : 'hover:ring-1 hover:ring-white/30'}`;
+                div.style.width = `${vp.width}px`; div.style.height = `${vp.height}px`; 
+                div.style.backgroundColor = pageData.bgColor;
+                // Thumbnail border preview
+                if (pageData.borderStyle && pageData.borderStyle !== 'none') {
+                    div.style.border = `${pageData.borderWidth * scale}px ${pageData.borderStyle} ${pageData.borderColor}`;
+                    div.style.boxSizing = 'border-box';
+                }
+
+                div.onclick = () => loadPage(i);
+
+                const pdfCanvas = document.createElement('canvas');
+                pdfCanvas.width = vp.width; pdfCanvas.height = vp.height;
+                pdfCanvas.className = 'absolute inset-0 block mix-blend-multiply';
+                page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp });
+                div.appendChild(pdfCanvas);
+
+                const elCanvas = document.createElement('canvas');
+                elCanvas.width = vp.width; elCanvas.height = vp.height;
+                elCanvas.className = 'absolute inset-0 pointer-events-none';
+                const elCtx = elCanvas.getContext('2d');
+                state.elements.filter(e => e.page === i).forEach(el => {
+                     const r = scale / state.scale;
+                     const x = el.x * r, y = el.y * r, w = el.width * r, h = el.height * r;
+                     
+                     // Draw Borders in Thumb
+                     if (el.borderStyle && el.borderStyle !== 'none') {
+                         elCtx.strokeStyle = el.borderColor;
+                         elCtx.lineWidth = el.borderWidth * r;
+                         if(el.borderStyle === 'dashed') elCtx.setLineDash([5*r, 5*r]);
+                         else if(el.borderStyle === 'dotted') elCtx.setLineDash([2*r, 2*r]);
+                         else elCtx.setLineDash([]);
+                         
+                         if(el.borderRadius) {
+                             elCtx.beginPath(); elCtx.roundRect(x,y,w,h, el.borderRadius*r); elCtx.stroke();
+                         } else {
+                             elCtx.strokeRect(x,y,w,h);
+                         }
+                         elCtx.setLineDash([]); // Reset
+                     }
+
+                     if (el.type === 'rect') { 
+                         elCtx.fillStyle = el.color; 
+                         if(el.borderRadius) { elCtx.beginPath(); elCtx.roundRect(x,y,w,h,el.borderRadius*r); elCtx.fill(); }
+                         else elCtx.fillRect(x, y, w, h); 
+                     }
+                     else if (el.type === 'text') { elCtx.fillStyle = el.color; elCtx.font = `${el.fontSize * r}px ${el.fontFamily}`; elCtx.fillText(el.content.replace(/<[^>]*>/g, ''), x, y + 10); } 
+                     else if (el.type === 'image') { const img = new Image(); img.src = el.content; img.onload = () => elCtx.drawImage(img, x, y, w, h); }
+                     else if (el.type === 'draw') {
+                         elCtx.save(); elCtx.translate(x, y); elCtx.scale(w/el.originalWidth, h/el.originalHeight);
+                         elCtx.beginPath(); elCtx.strokeStyle = el.color; elCtx.lineWidth = el.strokeWidth * r;
+                         if(el.points.length > 0) { elCtx.moveTo(el.points[0].x, el.points[0].y); for(let k=1; k<el.points.length; k++) elCtx.lineTo(el.points[k].x, el.points[k].y); elCtx.stroke(); }
+                         elCtx.restore();
+                     }
+                });
+                div.appendChild(elCanvas);
+                const label = document.createElement('div'); label.className = 'absolute bottom-0 w-full bg-black/60 text-white text-[10px] py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'; label.innerText = `PAGE ${i}`; div.appendChild(label);
+                container.appendChild(div);
+            }
+        }
+
+        function renderSignatures() {
+            const list = document.getElementById('signatures-list');
+            list.innerHTML = '';
+            savedSignatures.forEach((sig, idx) => {
+                const div = document.createElement('div');
+                div.className = 'signature-item bg-white rounded p-2 cursor-pointer border border-transparent hover:border-neon-400 group flex items-center justify-between';
+                div.onclick = () => window.addSignatureToCanvas(sig);
+                const img = document.createElement('img'); img.src = sig; img.className = 'h-8 object-contain pointer-events-none flex-1';
+                const del = document.createElement('button'); del.className = 'ml-2 p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500 hover:text-white transition-colors';
+                del.innerHTML = '<i data-lucide="trash-2" width="14" height="14"></i>'; del.onclick = (e) => { e.stopPropagation(); window.deleteSig(idx); };
+                div.appendChild(img); div.appendChild(del); list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function loadPage(num) {
+            if(num < 1 || num > state.pdfDoc.numPages) return;
+            if(state.renderTask) { try { await state.renderTask.cancel(); } catch(e){} state.renderTask = null; }
+            const pageData = state.pages[num-1];
+            if (pageData.deleted) {
+                let next = -1;
+                for(let i=num; i<=state.pdfDoc.numPages; i++) if(!state.pages[i-1].deleted) { next=i; break; }
+                if(next===-1) for(let i=num; i>=1; i--) if(!state.pages[i-1].deleted) { next=i; break; }
+                if(next !== -1 && next !== num) return loadPage(next);
+                return;
+            }
+            state.currentPage = num; state.selectedId = null; state.isEditingText = false;
+            
+            document.querySelectorAll('.thumbnail').forEach(el => el.classList.remove('ring-2', 'ring-neon-400'));
+            
+            // Page Background & Border
+            const layer = document.getElementById('page-bg-layer');
+            layer.style.backgroundColor = pageData.bgColor;
+            if(pageData.borderStyle && pageData.borderStyle !== 'none') {
+                layer.style.border = `${pageData.borderWidth}px ${pageData.borderStyle} ${pageData.borderColor}`;
+            } else {
+                layer.style.border = 'none';
+            }
+            document.getElementById('page-bg-color').value = pageData.bgColor;
+            
+            const page = await state.pdfDoc.getPage(num);
+            const rot = (page.rotate + pageData.rotation) % 360;
+            state.currentViewport = page.getViewport({ scale: 1.0, rotation: rot });
+            const vp = page.getViewport({ scale: state.scale, rotation: rot });
+            
+            canvas.width = vp.width; canvas.height = vp.height;
+            drawCanvas.width = vp.width; drawCanvas.height = vp.height;
+            canvasWrapper.style.width = vp.width+'px'; canvasWrapper.style.height = vp.height+'px';
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            
+            state.renderTask = page.render({ canvasContext: ctx, viewport: vp });
+            try { await state.renderTask.promise; } catch(e) {} finally { state.renderTask = null; }
+            renderElements(); updatePropsPanel(); renderThumbnails();
+        }
+
+        // --- CORE LOGIC ---
+
+        window.toggleTextStyle = function(command) {
+            if(state.selectedId && state.isEditingText) {
+                document.execCommand(command, false, null);
+                const el = state.elements.find(e => e.id === state.selectedId);
+                const activeEl = document.querySelector('.overlay-el.editing .text-content-area');
+                if(el && activeEl) el.content = activeEl.innerHTML;
+            } else if (state.selectedId) {
+                const el = state.elements.find(e => e.id === state.selectedId);
+                if(el) {
+                    if(command === 'bold') el.isBold = !el.isBold;
+                    if(command === 'italic') el.isItalic = !el.isItalic;
+                    if(command === 'underline') el.isUnderline = !el.isUnderline;
+                    renderElements(); addToHistory();
+                }
+            }
             updatePropsPanel();
-        }
+        };
 
-        // Interaction (Drag/Resize)
-        let dragInfo = null;
-        function startDrag(e, el) {
-            if(state.tool === 'draw') return;
-            e.stopPropagation();
-            selectElement(el.id);
-            renderElements();
-            dragInfo = { type: 'move', el, startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
-        }
-        function startResize(e, el) {
-            e.stopPropagation();
-            dragInfo = { type: 'resize', el, startX: e.clientX, startY: e.clientY, origW: el.width, origH: el.height };
-        }
-        window.addEventListener('mousemove', (e) => {
-            if(!dragInfo) return;
-            const dx = e.clientX - dragInfo.startX;
-            const dy = e.clientY - dragInfo.startY;
-            if(dragInfo.type === 'move') {
-                dragInfo.el.x = dragInfo.origX + dx;
-                dragInfo.el.y = dragInfo.origY + dy;
-                const domEl = document.querySelector('.overlay-el.selected');
-                if(domEl) { domEl.style.left = dragInfo.el.x + 'px'; domEl.style.top = dragInfo.el.y + 'px'; }
-            } else {
-                dragInfo.el.width = Math.max(20, dragInfo.origW + dx);
-                dragInfo.el.height = Math.max(20, dragInfo.origH + dy);
-                const domEl = document.querySelector('.overlay-el.selected');
-                if(domEl) { domEl.style.width = dragInfo.el.width + 'px'; domEl.style.height = dragInfo.el.height + 'px'; }
+        window.updateProp = function(key, val) { 
+            if(!state.selectedId) return;
+            const el = state.elements.find(e=>e.id===state.selectedId); 
+            if(!el) return;
+
+            if (key === 'color' && state.isEditingText) {
+                document.execCommand('foreColor', false, val);
+                const activeEl = document.querySelector('.overlay-el.editing .text-content-area');
+                if(activeEl) el.content = activeEl.innerHTML;
+                return;
             }
-        });
-        window.addEventListener('mouseup', () => {
-            if(dragInfo) { dragInfo = null; saveHistory(); renderElements(); }
-        });
+
+            el[key] = val; 
+            
+            if(key === 'fontSize' && el.type === 'text') {
+                const dummy = document.createElement('div');
+                dummy.style.position = 'absolute'; dummy.style.visibility = 'hidden';
+                dummy.style.fontFamily = el.fontFamily; dummy.style.fontSize = val + 'px';
+                dummy.style.width = 'auto'; dummy.style.whiteSpace = 'pre-wrap';
+                dummy.innerHTML = el.content;
+                document.body.appendChild(dummy);
+                el.width = Math.max(50, dummy.offsetWidth + 15);
+                el.height = Math.max(val, dummy.offsetHeight);
+                document.body.removeChild(dummy);
+            }
+            
+            renderElements(); updatePropsPanel(); 
+        };
+
+        window.updatePageProp = function(key, val) {
+            const pageData = state.pages[state.currentPage - 1];
+            if(pageData) {
+                pageData[key] = val;
+                loadPage(state.currentPage); // Reload to update layer border
+                addToHistory();
+            }
+        };
+
+        window.deleteSelected = function() { if(state.selectedId) { state.elements = state.elements.filter(e => e.id !== state.selectedId); state.selectedId = null; renderElements(); updatePropsPanel(); addToHistory(); } };
+        window.duplicateSelected = function() { const el = state.elements.find(e => e.id === state.selectedId); if(el) { const c = JSON.parse(JSON.stringify(el)); c.id = createId(); c.x += 20; c.y += 20; state.elements.push(c); selectElement(c.id); renderElements(); addToHistory(); } };
+        window.setLeftTab = function(tab) {
+            document.getElementById('tab-pages').classList.toggle('hidden', tab !== 'pages'); 
+            document.getElementById('tab-layers').classList.toggle('hidden', tab !== 'layers'); 
+            document.getElementById('tab-sigs').classList.toggle('hidden', tab !== 'sigs');
+            ['pages','layers','sigs'].forEach(t => document.getElementById(`tab-btn-${t}`).className = tab===t ? 'flex-1 py-2 text-neon-400 border-b-2 border-neon-400 bg-white/5 flex items-center justify-center' : 'flex-1 py-2 text-slate-500 hover:text-white flex items-center justify-center');
+        };
+        window.toggleSidebar = function(side, f) { const el = document.getElementById(side + '-sidebar'); if(side === 'right') el.classList.toggle('hidden'); if(f || el.classList.contains(side==='left'?'-translate-x-full':'translate-x-full')) el.classList.remove(side==='left'?'-translate-x-full':'translate-x-full'); else el.classList.add(side==='left'?'-translate-x-full':'translate-x-full'); };
+        window.rotatePage = function(a) { if(state.currentPage>0) { const p = state.pages[state.currentPage-1]; p.rotation = (p.rotation+a)%360; loadPage(state.currentPage); addToHistory(); } };
+        window.deleteCurrentPage = function() { if(state.pages.filter(p=>!p.deleted).length<=1) return showToast("Min 1 Page"); state.pages[state.currentPage-1].deleted=true; let next = -1; for(let i=state.currentPage; i<=state.pdfDoc.numPages; i++) { if(!state.pages[i-1].deleted) { next=i; break; } } if(next===-1) { for(let i=state.currentPage; i>=1; i--) { if(!state.pages[i-1].deleted) { next=i; break; } } } if(next !== -1) loadPage(next); addToHistory(); showToast("Page Deleted"); };
+        window.addNewPage = async function() { try { const doc = await PDFLib.PDFDocument.load(state.pdfBytes); doc.addPage([595.28, 841.89]); state.pdfBytes = await doc.save(); state.pages.push({ index: state.pages.length+1, rotation: 0, deleted: false, bgColor: '#ffffff' }); const t = pdfjsLib.getDocument({data:state.pdfBytes.slice()}); state.pdfDoc = await t.promise; loadPage(state.pdfDoc.numPages); addToHistory(); } catch(e){ alert(e); } };
         
-        // Workspace Click Deselect
-        document.getElementById('workspace').addEventListener('mousedown', (e) => {
-            if(e.target.id === 'workspace' || e.target.id === 'overlay-layer') {
-                state.selectedId = null;
-                renderElements();
-            }
-        });
+        function addToHistory() { if (state.historyStep < state.history.length - 1) state.history = state.history.slice(0, state.historyStep + 1); state.history.push(JSON.stringify({ elements: state.elements, pages: state.pages })); state.historyStep++; if (state.history.length > 30) { state.history.shift(); state.historyStep--; } renderThumbnails(); }
+        window.undo = function() { if (state.historyStep > 0) { state.historyStep--; restoreState(state.history[state.historyStep]); } };
+        window.redo = function() { if (state.historyStep < state.history.length - 1) { state.historyStep++; restoreState(state.history[state.historyStep]); } };
+        function restoreState(json) { const data = JSON.parse(json); state.elements = data.elements; state.pages = data.pages; 
+            const p = state.pages[state.currentPage-1]; 
+            const l = document.getElementById('page-bg-layer'); l.style.backgroundColor=p.bgColor; 
+            if(p.borderStyle && p.borderStyle !== 'none') l.style.border=`${p.borderWidth}px ${p.borderStyle} ${p.borderColor}`; else l.style.border='none';
+            document.getElementById('page-bg-color').value = p.bgColor; 
+            renderElements(); renderLayers(); renderThumbnails(); updatePropsPanel(); 
+        }
 
+        window.updatePageBg = function(c) { state.pages[state.currentPage-1].bgColor=c; document.getElementById('page-bg-layer').style.backgroundColor=c; };
+        function addElement(props) { const base = { id: createId(), page: state.currentPage, x: canvas.width/2 - (props.width||100)/2, y: canvas.height/2 - (props.height||50)/2, opacity: 1, ...props }; state.elements.push(base); selectElement(base.id); renderElements(); addToHistory(); if(window.innerWidth < 768) toggleSidebar('right', true); }
         function selectElement(id) { state.selectedId = id; updatePropsPanel(); }
-        function deleteSelected() {
-            if(state.selectedId) {
-                state.elements = state.elements.filter(e => e.id !== state.selectedId);
-                state.selectedId = null;
-                renderElements();
-                saveHistory();
-            }
-        }
-        function duplicateSelected() {
-            const el = state.elements.find(e => e.id === state.selectedId);
-            if(el) {
-                const newEl = JSON.parse(JSON.stringify(el));
-                newEl.id = createId();
-                newEl.x += 20; newEl.y += 20;
-                state.elements.push(newEl);
-                selectElement(newEl.id);
-                renderElements();
-                saveHistory();
-            }
+        window.moveLayer = function(id, d) { const idx = state.elements.findIndex(e => e.id === id); if(idx < 0) return; const newIdx = idx + d; if(newIdx>=0 && newIdx<state.elements.length && state.elements[newIdx].page===state.elements[idx].page) { [state.elements[idx], state.elements[newIdx]] = [state.elements[newIdx], state.elements[idx]]; renderElements(); addToHistory(); } };
+        window.deleteLayer = function(id) { state.elements = state.elements.filter(e => e.id !== id); if(state.selectedId === id) { state.selectedId = null; updatePropsPanel(); } renderElements(); addToHistory(); };
+
+        async function rasterizeTextElement(el) {
+            const tempCanvas = document.createElement('canvas');
+            const scaleFactor = 2; 
+            // Calculate size including border
+            const bw = el.borderWidth || 0;
+            tempCanvas.width = (el.width + bw*2) * scaleFactor;
+            tempCanvas.height = (el.height + bw*2) * scaleFactor;
+            const tCtx = tempCanvas.getContext('2d');
+            tCtx.scale(scaleFactor, scaleFactor);
+            // Offset for border
+            tCtx.translate(bw, bw);
+
+            // Construct SVG with rich text
+            const borderStyle = (el.borderStyle && el.borderStyle!=='none') ? 
+                `border: ${el.borderWidth}px ${el.borderStyle} ${el.borderColor}; border-radius: ${el.borderRadius||0}px; box-sizing: border-box;` : '';
+            
+            const svgData = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${el.width}" height="${el.height}">
+                <foreignObject width="100%" height="100%">
+                    <div xmlns="http://www.w3.org/1999/xhtml" style="
+                        font-family: '${el.fontFamily}', sans-serif;
+                        font-size: ${el.fontSize}px;
+                        color: ${el.color};
+                        text-align: ${el.textAlign || 'left'};
+                        font-weight: ${el.isBold ? 'bold' : 'normal'};
+                        font-style: ${el.isItalic ? 'italic' : 'normal'};
+                        text-decoration: ${el.isUnderline ? 'underline' : 'none'};
+                        line-height: 1.2;
+                        overflow: hidden;
+                        ${borderStyle}
+                        background-color: ${el.backgroundColor || 'transparent'};
+                    ">
+                        ${el.content}
+                    </div>
+                </foreignObject>
+            </svg>`;
+            
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => { tCtx.drawImage(img, 0, 0); resolve(tempCanvas.toDataURL('image/png')); };
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+            });
         }
 
-        // Props UI
-        function updatePropsPanel() {
-            const el = state.elements.find(e => e.id === state.selectedId);
-            const empty = document.getElementById('props-empty');
-            const content = document.getElementById('props-content');
+        window.exportPDF = async function() {
+            const btn = document.getElementById('export-btn'); 
+            btn.innerHTML = `<span class="animate-pulse">BUILDING...</span>`;
             
-            if(!el) {
-                empty.classList.remove('hidden'); content.classList.add('hidden');
-            } else {
-                empty.classList.add('hidden'); content.classList.remove('hidden');
-                document.getElementById('prop-text-group').classList.toggle('hidden', el.type !== 'text');
-                document.getElementById('prop-color-group').classList.toggle('hidden', el.type === 'image');
+            try {
+                const { PDFDocument, rgb, StandardFonts } = PDFLib;
+                const pdfDoc = await PDFDocument.load(state.pdfBytes);
                 
-                if(el.type !== 'image') {
-                    document.getElementById('prop-color').value = el.color;
-                    document.getElementById('prop-color-hex').value = el.color;
-                }
-                document.getElementById('prop-opacity').value = el.opacity;
-                document.getElementById('prop-opacity-val').innerText = el.opacity;
+                const toDel = []; state.pages.forEach((p,i)=> {if(p.deleted) toDel.push(i)}); toDel.sort((a,b)=>b-a).forEach(i=>pdfDoc.removePage(i));
+                const valid = state.pages.filter(p=>!p.deleted); 
                 
-                if(el.type === 'text') {
-                    document.getElementById('prop-size-slider').value = el.fontSize;
-                    document.getElementById('prop-size-val').innerText = el.fontSize;
-                    document.getElementById('prop-font').value = el.fontFamily;
-                }
-            }
-        }
-        function updateProp(key, val) {
-            const el = state.elements.find(e => e.id === state.selectedId);
-            if(el) { el[key] = val; renderElements(); }
-        }
-
-        // Drawing
-        let isDrawing = false, currentPath = null;
-        function setTool(t) {
-            state.tool = t;
-            document.querySelectorAll('.cyber-btn').forEach(b => b.classList.remove('active'));
-            if(t === 'select') document.getElementById('btn-select').classList.add('active');
-            if(t === 'draw') document.getElementById('btn-draw').classList.add('active');
-            
-            if(t === 'draw') {
-                drawCanvas.classList.remove('hidden');
-                drawCanvas.classList.add('cursor-crosshair');
-                state.selectedId = null; renderElements();
-            } else {
-                drawCanvas.classList.add('hidden');
-            }
-        }
-        
-        drawCanvas.addEventListener('mousedown', (e) => {
-            if(state.tool !== 'draw') return;
-            isDrawing = true;
-            const rect = drawCanvas.getBoundingClientRect();
-            currentPath = { points: [{x: e.clientX - rect.left, y: e.clientY - rect.top}], color: '#00f3ff', width: 2 };
-            drawCtx.beginPath();
-            drawCtx.moveTo(currentPath.points[0].x, currentPath.points[0].y);
-            drawCtx.strokeStyle = currentPath.color; drawCtx.lineWidth = 2;
-        });
-        drawCanvas.addEventListener('mousemove', (e) => {
-            if(!isDrawing) return;
-            const rect = drawCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
-            currentPath.points.push({x,y});
-            drawCtx.lineTo(x,y); drawCtx.stroke();
-        });
-        window.addEventListener('mouseup', () => {
-            if(isDrawing) {
-                isDrawing = false;
-                let pageDrawings = state.drawings.find(d => d.page === state.currentPage);
-                if(!pageDrawings) { pageDrawings = {page: state.currentPage, paths:[]}; state.drawings.push(pageDrawings); }
-                pageDrawings.paths.push(currentPath);
-                currentPath = null;
-                saveHistory();
-            }
-        });
-        function renderDrawings() {
-            drawCtx.clearRect(0,0,drawCanvas.width, drawCanvas.height);
-            const pageD = state.drawings.find(d => d.page === state.currentPage);
-            if(pageD) {
-                pageD.paths.forEach(p => {
-                    drawCtx.beginPath();
-                    drawCtx.strokeStyle = p.color; drawCtx.lineWidth = p.width;
-                    drawCtx.moveTo(p.points[0].x, p.points[0].y);
-                    for(let i=1; i<p.points.length; i++) drawCtx.lineTo(p.points[i].x, p.points[i].y);
-                    drawCtx.stroke();
-                });
-            }
-        }
-
-        // Export
-        async function exportPDF() {
-            const { PDFDocument, rgb, StandardFonts } = PDFLib;
-            const newDoc = await PDFDocument.create();
-            const srcDoc = await PDFDocument.load(state.pdfBytes);
-            const pagesToKeep = state.pages.filter(p => !p.deleted).map(p => p.index - 1);
-            const copiedPages = await newDoc.copyPages(srcDoc, pagesToKeep);
-            const helvetica = await newDoc.embedFont(StandardFonts.Helvetica);
-            
-            const hexToRgb = (hex) => {
-                const r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
-                return rgb(r,g,b);
-            }
-
-            for(let i=0; i<copiedPages.length; i++) {
-                const page = copiedPages[i];
-                newDoc.addPage(page);
-                const originalIndex = pagesToKeep[i] + 1;
-                const { width, height } = page.getSize();
-
-                // Elements
-                state.elements.filter(e => e.page === originalIndex).forEach(async el => {
-                    const x = el.x / state.scale;
-                    const y = height - ((el.y + el.height) / state.scale);
-                    const w = el.width / state.scale;
-                    const h = el.height / state.scale;
-
-                    if(el.type === 'text') {
-                        page.drawText(el.content, {
-                            x: el.x / state.scale,
-                            y: height - ((el.y/state.scale) + (el.fontSize/state.scale)),
-                            size: el.fontSize/state.scale,
-                            font: helvetica,
-                            color: hexToRgb(el.color),
-                            opacity: el.opacity
-                        });
-                    } else if(el.type === 'rect') {
-                        page.drawRectangle({ x, y, width: w, height: h, color: hexToRgb(el.color), opacity: el.opacity });
+                pdfDoc.registerFontkit(fontkit);
+                
+                for(let i=0; i<valid.length; i++) {
+                    const meta = valid[i], page = pdfDoc.getPage(i), {width, height} = page.getSize();
+                    if(meta.bgColor && meta.bgColor!=='#ffffff') page.drawRectangle({x:0, y:0, width, height, color:hexToRgb(meta.bgColor)});
+                    
+                    // Page Border
+                    if(meta.borderStyle && meta.borderStyle !== 'none') {
+                        const bw = meta.borderWidth || 1;
+                        const borderColor = hexToRgb(meta.borderColor);
+                        if(meta.borderStyle === 'solid') {
+                            page.drawRectangle({ x:0, y:0, width, height, borderColor, borderWidth:bw, color:undefined });
+                        } else if (meta.borderStyle === 'dashed' || meta.borderStyle === 'dotted') {
+                            // PDF-lib high level doesn't support dashed rect easily, manually draw lines
+                            const dash = meta.borderStyle === 'dashed' ? [10, 10] : [3, 3];
+                            // Top
+                            page.drawLine({ start:{x:0, y:height}, end:{x:width, y:height}, thickness:bw, color:borderColor, dashArray:dash });
+                            // Bottom
+                            page.drawLine({ start:{x:0, y:0}, end:{x:width, y:0}, thickness:bw, color:borderColor, dashArray:dash });
+                            // Left
+                            page.drawLine({ start:{x:0, y:0}, end:{x:0, y:height}, thickness:bw, color:borderColor, dashArray:dash });
+                            // Right
+                            page.drawLine({ start:{x:width, y:0}, end:{x:width, y:height}, thickness:bw, color:borderColor, dashArray:dash });
+                        }
                     }
-                    // Images handled similarly, omitted for brevity but logic stands
-                });
-            }
-            
-            const pdfBytes = await newDoc.save();
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'OMNI-PDF-EXPORT.pdf';
-            link.click();
-        }
 
-        lucide.createIcons();
+                    if(meta.rotation) page.setRotation({type:'degrees', angle:(page.getRotation().angle+meta.rotation)%360});
+                    
+                    const els = state.elements.filter(e=>e.page===meta.index);
+                    for(const el of els) {
+                        const y = height-el.y-el.height;
+                        
+                        // Handle Rects & Images with Borders
+                        if (el.type === 'rect') {
+                            // If it has radius or special border, might need custom drawing
+                            if (el.borderRadius || el.borderStyle !== 'none') {
+                                // For now, simplest is raster if complex
+                                // But let's do basic rect
+                                const rectOpts = {
+                                    x: el.x, y, width: el.width, height: el.height,
+                                    color: hexToRgb(el.color), opacity: el.opacity,
+                                    borderColor: el.borderStyle !== 'none' ? hexToRgb(el.borderColor) : undefined,
+                                    borderWidth: el.borderStyle !== 'none' ? (el.borderWidth || 1) : 0,
+                                };
+                                page.drawRectangle(rectOpts);
+                            } else {
+                                page.drawRectangle({x:el.x, y, width:el.width, height:el.height, color:hexToRgb(el.color), opacity:el.opacity});
+                            }
+                        }
+                        else if(el.type==='text') { 
+                            const hasHtml = /<[a-z][\s\S]*>/i.test(el.content);
+                            const isStandardFont = ['Helvetica','Times-Roman','Courier'].some(f => el.fontFamily.includes(f));
+                            const hasBorder = el.borderStyle && el.borderStyle !== 'none';
+                            
+                            if (hasHtml || !isStandardFont || hasBorder) {
+                                // Rasterize if rich text, custom font, or HAS BORDER (simpler than drawing border in PDF manually around text)
+                                const pngData = await rasterizeTextElement(el);
+                                const pngImage = await pdfDoc.embedPng(pngData);
+                                page.drawImage(pngImage, { x: el.x, y: y, width: el.width, height: el.height });
+                            } else {
+                                let font = await pdfDoc.embedFont(StandardFonts[el.fontFamily.replace(' ', '')] || StandardFonts.Helvetica);
+                                if(el.isBold) font = await pdfDoc.embedFont(StandardFonts.HelveticaBold); 
+                                page.drawText(el.content.replace(/<[^>]*>/g, ''), {
+                                    x: el.x + 2, y: height - el.y - el.fontSize - 4,
+                                    size: el.fontSize, font, color: hexToRgb(el.color)
+                                });
+                            }
+                            if(el.linkUrl) {
+                                const link = pdfDoc.context.register(
+                                    pdfDoc.context.obj({
+                                        Type: 'Annot', Subtype: 'Link', Rect: [el.x, y, el.x + el.width, y + el.height],
+                                        Border: [0, 0, 0], A: { Type: 'Action', S: 'URI', URI: el.linkUrl }
+                                    })
+                                );
+                                page.node.addAnnot(link);
+                            }
+                        }
+                        else if(el.type==='image') { 
+                            try{ 
+                                const b=await fetch(el.content).then(r=>r.arrayBuffer()); 
+                                const em = el.content.startsWith('data:image/png')?await pdfDoc.embedPng(b):await pdfDoc.embedJpg(b); 
+                                page.drawImage(em, {x:el.x, y, width:el.width, height:el.height}); 
+                            }catch(e){} 
+                        }
+                        else if(el.type==='draw') {
+                            if(el.points.length > 1) {
+                                const sx = el.width / el.originalWidth, sy = el.height / el.originalHeight;
+                                for(let k=0; k<el.points.length-1; k++) {
+                                    const p1 = el.points[k], p2 = el.points[k+1];
+                                    page.drawLine({
+                                        start: { x: el.x + p1.x * sx, y: height - (el.y + p1.y * sy) },
+                                        end: { x: el.x + p2.x * sx, y: height - (el.y + p2.y * sy) },
+                                        thickness: el.strokeWidth * sx, color: hexToRgb(el.color), lineCap: 'round'
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                const b = new Blob([await pdfDoc.save()], {type:'application/pdf'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='omnipedf.pdf'; a.click();
+            } catch(e) { alert("Export Error: " + e.message); console.error(e); } 
+            finally { btn.innerHTML = `<i data-lucide="download" width="16"></i> <span class="hidden sm:inline">EXPORT</span>`; initIcons(); }
+        };
+
+        // Window Exports (Hoisted)
+        window.initApp = async function(data) {
+            try {
+                if (state.renderTask) { await state.renderTask.cancel(); state.renderTask = null; }
+                const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+                state.pdfBytes = u8.slice();
+                state.pdfDoc = await pdfjsLib.getDocument({ data: u8.slice() }).promise;
+                state.pages = Array.from({ length: state.pdfDoc.numPages }, (_, i) => ({ index: i+1, rotation: 0, deleted: false, bgColor: '#ffffff' }));
+                document.getElementById('start-screen').style.display = 'none';
+                await renderThumbnails(); renderSignatures();
+                state.currentPage = 1; await loadPage(1);
+                addToHistory(); 
+                setTimeout(() => {
+                    const dash = document.getElementById('dashboard'); dash.classList.remove('hidden'); void dash.offsetWidth; 
+                    resetView(); if(state.currentViewport) resetView(); 
+                    if(window.enterEditor) window.enterEditor();
+                    requestAnimationFrame(() => dash.style.opacity = '1');
+                }, 100);
+            } catch (err) { console.error(err); showToast("Load Error"); }
+        };
+
+        window.createBlankPDF = async function() { try { const d = await PDFLib.PDFDocument.create(); d.addPage([595.28, 841.89]); const b = await d.save(); setTimeout(()=>window.initApp(b), 1500); } catch(e){ alert(e); } };
+        window.addText = function() { addElement({ type: 'text', content: 'Double click to edit', fontSize: 24, fontFamily: 'Helvetica', color: '#00f3ff', width: 200, height: 40 }); };
+        window.addRect = function() { addElement({ type: 'rect', color: '#00f3ff', width: 100, height: 100 }); };
+        window.addHighlight = function() { addElement({ type: 'rect', color: '#ffff00', opacity: 0.3, width: 200, height: 30 }); };
+        window.addStamp = function(text, color) { addElement({ type: 'text', content: text, fontSize: 36, fontFamily: 'Helvetica', color: color, width: 200, height: 50, isStamp: true }); };
+        window.setTool = function(t) {
+            state.tool = t; document.querySelectorAll('.cyber-btn').forEach(b => b.classList.remove('active'));
+            if(t === 'select') document.getElementById('btn-select').classList.add('active'); if(t === 'draw') document.getElementById('btn-draw').classList.add('active');
+            const dl = document.getElementById('drawing-layer'); if (t === 'draw') { dl.classList.add('active'); document.getElementById('draw-props').classList.remove('hidden'); state.selectedId = null; renderElements(); } else { dl.classList.remove('active'); document.getElementById('draw-props').classList.add('hidden'); }
+        };
+        window.openSignatureModal = function() { document.getElementById('sig-modal').classList.remove('hidden'); const c = document.getElementById('sig-canvas'); const rect = c.parentElement.getBoundingClientRect(); c.width = rect.width; c.height = rect.height; const cx = c.getContext('2d'); cx.clearRect(0,0,c.width,c.height); cx.lineWidth = 3; cx.lineCap='round'; cx.strokeStyle='#000'; let painting = false; const start = (e) => { painting = true; cx.beginPath(); cx.moveTo(e.offsetX||e.touches[0].clientX-rect.left, e.offsetY||e.touches[0].clientY-rect.top); }; const move = (e) => { if(!painting) return; e.preventDefault(); cx.lineTo(e.offsetX||e.touches[0].clientX-rect.left, e.offsetY||e.touches[0].clientY-rect.top); cx.stroke(); }; const end = () => { painting = false; }; c.onmousedown=start; c.onmousemove=move; c.onmouseup=end; c.ontouchstart=start; c.ontouchmove=move; c.ontouchend=end; };
+        window.clearSig = function() { const c = document.getElementById('sig-canvas'); c.getContext('2d').clearRect(0,0,c.width,c.height); };
+        window.saveSig = function() { const data = document.getElementById('sig-canvas').toDataURL(); savedSignatures.push(data); localStorage.setItem('omni_signatures', JSON.stringify(savedSignatures)); document.getElementById('sig-modal').classList.add('hidden'); renderSignatures(); setLeftTab('sigs'); toggleSidebar('left', true); };
+        window.deleteSig = function(index) { savedSignatures.splice(index, 1); localStorage.setItem('omni_signatures', JSON.stringify(savedSignatures)); renderSignatures(); };
+        window.addSignatureToCanvas = function(url) { const img = new Image(); img.src = url; img.onload = () => { const aspectRatio = img.width / img.height; addElement({ type: 'image', subtype: 'signature', content: url, width: 150, height: 150 / aspectRatio, aspectRatio: aspectRatio }); }; };
+        window.triggerImageUpload = function() { document.getElementById('img-upload').click(); };
+
+        // Listeners & Init
+        initIcons();
+        document.querySelectorAll('#props-content input').forEach(i => i.addEventListener('change', () => addToHistory()));
+        document.getElementById('page-bg-color').addEventListener('change', () => addToHistory());
+        overlay.addEventListener('mousedown', startDraw); overlay.addEventListener('mousemove', draw); overlay.addEventListener('mouseup', endDraw); overlay.addEventListener('mouseleave', endDraw);
+        overlay.addEventListener('touchstart', startDraw); overlay.addEventListener('touchmove', draw); overlay.addEventListener('touchend', endDraw);
+        new ResizeObserver(() => { if(state.currentViewport && !isPanning && !isDrawing) resetView(); }).observe(document.getElementById('workspace'));
+        workspace.addEventListener('wheel', (e)=>{if(e.ctrlKey||e.metaKey||!e.shiftKey){e.preventDefault(); state.zoom=Math.max(0.1,Math.min(5,state.zoom-e.deltaY*0.001)); updateTransform();}}, {passive:false});
+        workspace.addEventListener('mousedown', (e)=>{if(state.tool!=='draw' && ['workspace','pan-container','overlay-layer'].includes(e.target.id)){isPanning=true; panStart={x:e.clientX-state.pan.x, y:e.clientY-state.pan.y}; workspace.style.cursor='grabbing';}});
+        window.addEventListener('mousemove', (e)=>{if(isPanning){e.preventDefault(); state.pan.x=e.clientX-panStart.x; state.pan.y=e.clientY-panStart.y; updateTransform();} else if (dragAction) {e.preventDefault(); handleMove(e.clientX, e.clientY);}});
+        window.addEventListener('touchmove', (e)=>{if(isPanning){} else if (dragAction) {e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY);}}, {passive: false});
+        window.addEventListener('mouseup', ()=>{if(dragAction){dragAction=null; addToHistory();} isPanning=false; workspace.style.cursor='grab';});
+        window.addEventListener('touchend', ()=>{if(dragAction){dragAction=null; addToHistory();} isPanning=false;});
+        window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); } if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); } if (!state.isEditingText && (e.key === 'Delete' || (e.key === 'Backspace' && state.elements.find(el=>el.id===state.selectedId)?.type!=='text'))) deleteSelected(); });
+        document.getElementById('img-upload').addEventListener('change', (e) => { if(e.target.files[0]) { const r = new FileReader(); r.onload = (evt) => { const i = new Image(); i.onload = () => { const rat = i.width/i.height; addElement({type:'image', content:evt.target.result, width:200, height:200/rat, aspectRatio:rat}); }; i.src = evt.target.result; }; r.readAsDataURL(e.target.files[0]); } });
+        document.getElementById('file-input').addEventListener('change', async (e) => { if(e.target.files[0]) { try { const b = await e.target.files[0].arrayBuffer(); setTimeout(()=>window.initApp(b), 1500); } catch(err){ alert("Load failed"); } } });
+
+        (function() {
+            let warpSpeed = 0, baseSpeed = 0.2, appMode = 'menu';
+            const starCanvas = document.getElementById('starfield'), starCtx = starCanvas.getContext('2d');
+            let stars = [], starW, starH, cx, cy;
+            function resizeStars() { starW = starCanvas.width = window.innerWidth; starH = starCanvas.height = window.innerHeight; cx = starW/2; cy = starH/2; initStars(); }
+            function initStars() { stars = []; for(let i=0; i<800; i++) stars.push({ x: Math.random()*starW-cx, y: Math.random()*starH-cy, z: Math.random()*starW, o: Math.random() }); }
+            function animateStars() {
+                if (appMode === 'menu') { starCtx.clearRect(0, 0, starW, starH); stars.forEach(s => { s.y -= baseSpeed; if(s.y < -cy) { s.y = cy; s.x = Math.random()*starW-cx; } const x = s.x+cx; const y = s.y+cy; const size = Math.max(1.5, (1-s.z/starW)*3); const op = 0.6+Math.sin(Date.now()*0.002+s.o*10)*0.4; starCtx.fillStyle = `rgba(255,255,255,${op})`; starCtx.beginPath(); starCtx.arc(x, y, size, 0, Math.PI*2); starCtx.fill(); }); }
+                else if (appMode === 'warp') { starCtx.fillStyle = 'rgba(5,5,5,0.3)'; starCtx.fillRect(0,0,starW,starH); stars.forEach(s => { s.z -= (baseSpeed+warpSpeed)*5; if(s.z <= 0) { s.z=starW; s.x=Math.random()*starW-cx; s.y=Math.random()*starH-cy; } const x = (s.x/s.z)*cx+cx; const y = (s.y/s.z)*cy+cy; if(x>0 && x<starW && y>0 && y<starH) { starCtx.beginPath(); const tx = (s.x/(s.z+warpSpeed*10))*cx+cx; const ty = (s.y/(s.z+warpSpeed*10))*cy+cy; starCtx.moveTo(tx, ty); starCtx.lineTo(x, y); starCtx.strokeStyle = '#00f3ff'; starCtx.lineWidth = (1-s.z/starW)*4; starCtx.stroke(); } }); }
+                else { starCtx.clearRect(0, 0, starW, starH); stars.forEach(s => { s.y -= baseSpeed*0.8; if(s.y < -cy) { s.y = cy; s.x = Math.random()*starW-cx; } const x = s.x+cx; const y = s.y+cy; starCtx.fillStyle = `rgba(255,255,255,0.25)`; starCtx.beginPath(); starCtx.arc(x, y, Math.max(1, (1-s.z/starW)*2), 0, Math.PI*2); starCtx.fill(); }); }
+                requestAnimationFrame(animateStars);
+            }
+            window.addEventListener('resize', resizeStars); resizeStars(); animateStars();
+            window.launchApp = function(mode) { appMode = 'warp'; const up = setInterval(() => { warpSpeed += 2; if(warpSpeed > 60) { clearInterval(up); if(mode==='upload') document.getElementById('file-input').click(); if(mode==='create') createBlankPDF(); } }, 30); const p = document.querySelector('#start-screen .glass-panel'); if(p) { p.style.transform = "scale(0.8)"; p.style.opacity = "0"; } };
+            window.enterEditor = function() { const dn = setInterval(() => { warpSpeed *= 0.85; if(warpSpeed < 0.5) { warpSpeed=0; clearInterval(dn); appMode='editor'; initStars(); } }, 50); };
+        })();
+
+        function resetView() {
+            const ws = document.getElementById('workspace');
+            if(!ws || !state.currentViewport) { setTimeout(resetView, 100); return; }
+            if (ws.clientWidth === 0) return;
+            const m = 60; const sX = (ws.clientWidth - m) / state.currentViewport.width; const sY = (ws.clientHeight - m) / state.currentViewport.height;
+            state.zoom = Math.min(sX, sY, 1.2); 
+            state.pan.x = (ws.clientWidth - state.currentViewport.width * state.zoom) / 2;
+            state.pan.y = (ws.clientHeight - state.currentViewport.height * state.zoom) / 2;
+            updateTransform();
+        }
+        function updateTransform() { document.getElementById('pan-container').style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`; document.getElementById('zoom-disp').innerText = Math.round(state.zoom*100)+'%'; }
+        
+        window.loadApp = async function(b) { await window.initApp(b); };
     </script>
 </body>
 </html>
