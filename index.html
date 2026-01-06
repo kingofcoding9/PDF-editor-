@@ -1,547 +1,785 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-space">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Omni-PDF: Command Deck</title>
-    
-    <!-- Tailwind CSS -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>OmniPDF Editor - Cyber UI (Full Featured)</title>
+    <meta name="description" content="A cyberpunk-styled PDF editor with advanced annotation features, including adding text, shapes, images, signatures, and freehand drawing." />
+
+    <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- PDF-lib & fontkit -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+
+    <!-- Inter Font -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    
     <script>
         tailwind.config = {
-            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        space: { 900: '#0b0d17', 800: '#15192b', 700: '#1e233b' },
-                        neon: { 400: '#00f3ff', 500: '#00d0db', 600: '#00a8b0' },
-                        alert: { 500: '#ff2a6d' }
+                        'space': '#050505',
+                        'neon': {
+                            400: '#00f3ff',
+                            500: '#7c4dff',
+                            600: '#00ff7f',
+                        },
+                        'alert': {
+                            500: '#ff3b3b'
+                        }
                     },
                     fontFamily: {
-                        sans: ['Rajdhani', 'ui-sans-serif', 'system-ui'],
-                        mono: ['Share Tech Mono', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
                     },
-                    zIndex: { '60': '60', '70': '70', '100': '100', 'modal': '999' }
+                    boxShadow: {
+                        'neon': '0 0 15px rgba(0, 243, 255, 0.3)',
+                        'neon-lg': '0 0 30px rgba(0, 243, 255, 0.4)',
+                        'inner-glow': 'inset 0 0 20px rgba(0, 243, 255, 0.15)'
+                    }
                 }
             }
         }
     </script>
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Lobster&family=Dancing+Script:wght@400;700&family=Oswald:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-    
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- PDF Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
-    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
 
     <style>
-        body, html { 
-            height: 100%; width: 100%; margin: 0; padding: 0;
-            background-color: #050505; 
-            color: #cdd6f4; 
-            overflow: hidden; 
-            font-family: 'Rajdhani', sans-serif; 
-            touch-action: none; 
-            user-select: none;
-        }
-
-        .glass-panel {
-            background: rgba(11, 13, 23, 0.7); 
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(0, 243, 255, 0.15);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-        }
-
-        .cyber-btn {
-            background: rgba(0, 243, 255, 0.05);
-            border: 1px solid rgba(0, 243, 255, 0.3);
-            color: #00f3ff;
-            font-family: 'Share Tech Mono', monospace;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.2s ease;
-        }
-        .cyber-btn:hover:not(:disabled) {
-            background: rgba(0, 243, 255, 0.15);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
-            border-color: #00f3ff;
-            transform: translateY(-1px);
-        }
-        .cyber-btn:active { transform: translateY(1px); }
-        .cyber-btn.active {
-            background: rgba(0, 243, 255, 0.25);
-            box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.2);
-            border-color: #00f3ff;
-        }
-
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #005f66; border-radius: 2px; }
-
-        .overlay-el { position: absolute; box-sizing: border-box; transform-origin: top left; cursor: grab; }
-        .overlay-el:active { cursor: grabbing; }
-        .overlay-el.selected { outline: 1px dashed #00f3ff; background: rgba(0, 243, 255, 0.05); z-index: 50; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; touch-action: none; }
+        .cyber-panel { background: rgba(10, 10, 20, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(0, 243, 255, 0.2); box-shadow: 0 0 30px rgba(0, 243, 255, 0.1), inset 0 0 10px rgba(0, 243, 255, 0.05); }
+        .cyber-btn { background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), rgba(124, 77, 255, 0.1)); border: 1px solid rgba(0, 243, 255, 0.3); transition: all 0.2s ease; }
+        .cyber-btn:hover { background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(124, 77, 255, 0.2)); box-shadow: 0 0 15px rgba(0, 243, 255, 0.3); transform: translateY(-1px); }
+        .cyber-btn.active { background: rgba(0, 243, 255, 0.25); box-shadow: 0 0 20px rgba(0, 243, 255, 0.4); }
+        .glow-text { text-shadow: 0 0 8px rgba(0, 243, 255, 0.6); }
         
-        .resize-handle {
-            position: absolute; width: 12px; height: 12px; 
-            background: #000; border: 2px solid #00f3ff; 
-            border-radius: 50%; z-index: 60; display: none;
-            cursor: se-resize; right: -6px; bottom: -6px;
-            pointer-events: auto;
-        }
+        #overlay-layer { cursor: default; }
+        .overlay-el { position: absolute; border: 1px solid transparent; box-sizing: border-box; user-select: none; touch-action: none; }
+        .overlay-el.selected { outline: 1px dashed #00f3ff; background: rgba(0, 243, 255, 0.05); z-index: 50; }
+
+        /* PDF text hit-layer (for editing existing text) */
+        #pdf-text-layer { pointer-events: none; }
+        #pdf-text-layer.active { pointer-events: auto; }
+        #pdf-text-layer span { color: transparent !important; text-shadow: none !important; }
+        #pdf-text-layer.active span { cursor: text; }
+        #pdf-text-layer.active span.pdf-text-run:hover { background: rgba(0, 243, 255, 0.08); outline: 1px dashed rgba(0, 243, 255, 0.45); }
+        #pdf-text-layer.active span.pdf-text-run.selected { background: rgba(124, 77, 255, 0.12); outline: 1px dashed rgba(124, 77, 255, 0.55); }
+        
+        .resize-handle { position: absolute; width: 12px; height: 12px; background: #00f3ff; border-radius: 50%; right: -6px; bottom: -6px; cursor: se-resize; display: none; box-shadow: 0 0 8px rgba(0, 243, 255, 0.5); }
         .overlay-el.selected .resize-handle { display: block; }
 
-        .text-content-area {
-            width: 100%; height: 100%;
-            background: transparent; border: none; outline: none;
-            resize: none; padding: 0; overflow: hidden; font-family: sans-serif;
-            pointer-events: none; 
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .overlay-el.editing .text-content-area { pointer-events: auto; cursor: text; }
-        .text-shield { position: absolute; inset: 0; z-index: 10; }
-        .overlay-el.editing .text-shield { display: none; }
-
-        .scan-line {
-            position: fixed; inset: 0; pointer-events: none; z-index: 5;
-            background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 243, 255, 0.03) 2px, rgba(0, 243, 255, 0.03) 3px);
-            background-size: 100% 4px;
+        @media (pointer: coarse) {
+            .resize-handle { width: 18px; height: 18px; right: -9px; bottom: -9px; }
         }
 
-        .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .thumbnail { transition: all 0.2s; border: 2px solid transparent; }
-        .thumbnail:hover { border-color: rgba(0, 243, 255, 0.3); }
+        .text-content-area { outline: none; width: 100%; height: 100%; overflow: hidden; word-wrap: break-word; white-space: pre-wrap; }
+        .overlay-el.editing { border: 1px solid #00f3ff; user-select: text; }
+        .overlay-el.editing .text-content-area { user-select: text; }
 
-        #workspace { background: transparent; overflow: hidden; }
-        #pan-container { transform-origin: top left; }
-        #drawing-layer { pointer-events: none; }
+        /* Drawing layer styles */
         #drawing-layer.active { pointer-events: auto; cursor: crosshair; }
-        #page-bg-layer { transition: border 0.3s; box-sizing: border-box; }
+        #drawing-layer { pointer-events: none; }
         
-        .signature-item { position: relative; }
-        .delete-sig { display: flex; } 
-        
-        .layer-item:hover { background: rgba(255,255,255,0.05); }
-        .layer-item.active { background: rgba(0, 243, 255, 0.1); border-left: 2px solid #00f3ff; }
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(10, 10, 20, 0.5); }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 243, 255, 0.4); }
     </style>
 </head>
-<body>
 
-    <canvas id="starfield" class="fixed inset-0 z-0 bg-[#050505]"></canvas>
-    <div class="scan-line"></div>
-    <div id="toast" class="fixed bottom-4 right-4 bg-neon-900 border border-neon-400 text-neon-400 px-4 py-2 rounded shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[100] font-mono text-xs pointer-events-none">NOTIFICATION</div>
+<body class="font-sans text-white">
+    <!-- Starfield background -->
+    <canvas id="starfield" class="fixed inset-0 z-0"></canvas>
 
-    <div id="app-layer" class="relative z-10 h-full flex flex-col">
-        <!-- START SCREEN -->
-        <div id="start-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 bg-black/20 backdrop-blur-sm transition-all duration-1000">
-            <div class="glass-panel p-8 md:p-12 max-w-lg w-full text-center relative animate-float rounded-xl border-neon-400/30">
-                <div class="w-20 h-20 mx-auto mb-6 relative">
-                    <div class="absolute inset-0 border-2 border-neon-500 rounded-full animate-ping opacity-20"></div>
-                    <div class="absolute inset-2 border border-neon-400 rounded-full flex items-center justify-center bg-neon-900/20 shadow-neon"><i data-lucide="cpu" class="text-neon-400 w-10 h-10"></i></div>
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-space/90 backdrop-blur-xl">
+        <div class="cyber-panel p-8 rounded-2xl w-full max-w-md text-center relative overflow-hidden shadow-neon-lg">
+            <div class="absolute inset-0 opacity-20">
+                <div class="w-64 h-64 bg-neon-400/20 rounded-full blur-3xl absolute -top-32 -left-32 animate-pulse"></div>
+                <div class="w-64 h-64 bg-neon-500/20 rounded-full blur-3xl absolute -bottom-32 -right-32 animate-pulse delay-1000"></div>
+            </div>
+            <div class="relative">
+                <div class="flex items-center justify-center gap-3 mb-4">
+                    <div class="w-12 h-12 bg-neon-400/10 rounded-xl flex items-center justify-center border border-neon-400/30 shadow-neon">
+                        <i data-lucide="file-edit" class="text-neon-400" width="24"></i>
+                    </div>
+                    <h1 class="text-3xl font-bold glow-text text-neon-400 font-mono tracking-wider">OMNI<span class="text-neon-500">PDF</span></h1>
                 </div>
-                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2 tracking-tighter uppercase font-sans">Omni<span class="text-neon-400">PDF</span></h1>
-                <div class="space-y-3 mt-8">
-                    <button onclick="launchApp('upload')" id="upload-btn" class="cyber-btn w-full py-4 text-lg font-bold flex items-center justify-center gap-3 rounded group relative overflow-hidden">
-                        <div class="absolute inset-0 bg-neon-400/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div><i data-lucide="upload" class="group-hover:scale-110 transition-transform"></i> <span class="relative">UPLOAD PDF</span>
+                <p class="text-slate-400 mb-8 leading-relaxed">Cyberpunk PDF Editor. Add text, shapes, images, signatures, draw, rotate pages, and now edit existing PDF text.</p>
+                
+                <div class="space-y-4">
+                    <button onclick="launchApp('upload')" class="cyber-btn w-full py-4 px-6 rounded-xl font-semibold flex items-center justify-center gap-3 group">
+                        <i data-lucide="upload" class="text-neon-400 group-hover:scale-110 transition-transform" width="20"></i>
+                        <span>UPLOAD PDF</span>
                     </button>
-                    <button onclick="launchApp('create')" id="create-btn" class="cyber-btn w-full py-4 text-lg font-bold flex items-center justify-center gap-3 rounded group bg-transparent border-slate-600 text-slate-300 hover:text-white hover:border-white relative overflow-hidden">
-                        <div class="absolute inset-0 bg-white/5 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300"></div><i data-lucide="file-plus"></i> <span class="relative">CREATE BLANK</span>
+                    <button onclick="launchApp('create')" class="cyber-btn w-full py-4 px-6 rounded-xl font-semibold flex items-center justify-center gap-3 group">
+                        <i data-lucide="file-plus" class="text-neon-600 group-hover:scale-110 transition-transform" width="20"></i>
+                        <span>CREATE NEW</span>
                     </button>
                 </div>
-                <input type="file" id="file-input" class="hidden" accept="application/pdf">
-                <div class="mt-6 text-[10px] text-slate-500 font-mono">V 7.4.1 // PATCH</div>
+                
+                <div class="mt-8 text-xs text-slate-500 font-mono">
+                    DRAG TO PAN • PINCH TO ZOOM • CTRL/CMD+WHEEL TO ZOOM
+                </div>
             </div>
         </div>
+        <input type="file" id="file-input" accept="application/pdf" class="hidden" />
+    </div>
 
-        <!-- DASHBOARD -->
-        <div id="dashboard" class="flex flex-col h-full hidden opacity-0 transition-opacity duration-1000">
-            <!-- HEADER -->
-            <div class="h-14 md:h-16 glass-panel flex items-center justify-between px-2 md:px-6 shrink-0 z-50 border-b border-neon-500/20 relative">
-                <div class="flex items-center gap-2 md:gap-4">
-                    <button onclick="toggleSidebar('left')" class="md:hidden cyber-btn p-2 rounded"><i data-lucide="menu" width="18"></i></button>
-                    <span class="font-bold text-lg md:text-xl tracking-widest text-white truncate">OMNI<span class="text-neon-400">PDF</span></span>
-                    <div class="flex items-center gap-1 ml-4 border-l border-white/10 pl-4">
-                        <button onclick="undo()" class="cyber-btn p-1.5 rounded" title="Undo (Ctrl+Z)"><i data-lucide="rotate-ccw" width="16"></i></button>
-                        <button onclick="redo()" class="cyber-btn p-1.5 rounded" title="Redo (Ctrl+Y)"><i data-lucide="rotate-cw" width="16"></i></button>
+    <!-- Main App -->
+    <div id="dashboard" class="relative z-10 h-full flex flex-col opacity-0 transition-opacity duration-1000 hidden">
+        <!-- Top Bar -->
+        <header class="cyber-panel h-16 flex items-center justify-between px-4 md:px-6 gap-4 z-40">
+            <div class="flex items-center gap-3 min-w-0">
+                <button onclick="toggleSidebar('left')" class="cyber-btn p-2 rounded-lg md:hidden">
+                    <i data-lucide="menu" width="18"></i>
+                </button>
+                <div class="flex items-center gap-2 min-w-0">
+                    <div class="w-8 h-8 bg-neon-400/10 rounded-lg flex items-center justify-center border border-neon-400/30">
+                        <i data-lucide="file-edit" class="text-neon-400" width="16"></i>
                     </div>
-                </div>
-                <div class="flex-1 mx-2 md:mx-4 overflow-x-auto no-scrollbar mask-gradient touch-pan-x">
-                    <div class="flex items-center justify-start md:justify-center gap-1 min-w-max px-1">
-                        <button onclick="setTool('select')" id="btn-select" class="cyber-btn active p-2 rounded" title="Select (V)"><i data-lucide="mouse-pointer-2" width="18"></i></button>
-                        <div class="w-px h-6 bg-white/10 mx-1"></div>
-                        <button onclick="addText()" class="cyber-btn p-2 rounded" title="Text"><i data-lucide="type" width="18"></i></button>
-                        <button onclick="addRect()" class="cyber-btn p-2 rounded" title="Rectangle"><i data-lucide="square" width="18"></i></button>
-                        <button onclick="addHighlight()" class="cyber-btn p-2 rounded" title="Highlight"><i data-lucide="highlighter" width="18"></i></button>
-                        <button onclick="setTool('draw')" id="btn-draw" class="cyber-btn p-2 rounded" title="Draw"><i data-lucide="pen-tool" width="18"></i></button>
-                        <button onclick="openSignatureModal()" class="cyber-btn p-2 rounded" title="Create Signature"><i data-lucide="feather" width="18"></i></button>
-                        <button onclick="triggerImageUpload()" class="cyber-btn p-2 rounded" title="Image"><i data-lucide="image" width="18"></i></button>
-                        <input type="file" id="img-upload" class="hidden" accept="image/*">
-                        <div class="relative">
-                            <button onclick="document.getElementById('stamp-dropdown').classList.toggle('hidden')" class="cyber-btn p-2 rounded" title="Stamps"><i data-lucide="stamp" width="18"></i></button>
-                            <div id="stamp-dropdown" class="absolute top-full right-0 mt-2 w-32 glass-panel hidden p-1 z-50 flex flex-col gap-1">
-                                <button onclick="addStamp('APPROVED', '#00f3ff'); this.parentElement.classList.add('hidden')" class="w-full text-left px-2 py-2 text-xs text-neon-400 hover:bg-white/5">APPROVED</button>
-                                <button onclick="addStamp('DRAFT', '#94a3b8'); this.parentElement.classList.add('hidden')" class="w-full text-left px-2 py-2 text-xs text-slate-400 hover:bg-white/5">DRAFT</button>
-                                <button onclick="addStamp('URGENT', '#ff2a6d'); this.parentElement.classList.add('hidden')" class="w-full text-left px-2 py-2 text-xs text-alert-500 hover:bg-white/5">URGENT</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="toggleSidebar('right')" class="md:hidden cyber-btn p-2 rounded"><i data-lucide="sliders-horizontal" width="18"></i></button>
-                    <button onclick="exportPDF()" id="export-btn" class="cyber-btn px-3 md:px-4 py-1.5 rounded text-xs md:text-sm font-bold flex items-center gap-2 bg-neon-900/20"><i data-lucide="download" width="16"></i> <span class="hidden sm:inline">EXPORT</span></button>
+                    <h1 class="text-lg md:text-xl font-bold text-neon-400 font-mono tracking-wide truncate">OMNI<span class="text-neon-500">PDF</span></h1>
                 </div>
             </div>
-
-            <!-- WORKSPACE -->
-            <div class="flex-1 flex overflow-hidden relative z-0">
-                <div id="left-sidebar" class="sidebar-transition fixed md:static left-0 top-14 md:top-auto bottom-0 z-50 w-64 glass-panel border-r border-white/10 transform -translate-x-full md:translate-x-0 flex flex-col shrink-0 transform-gpu">
-                    <div class="flex border-b border-white/10 text-xs font-mono">
-                        <button onclick="setLeftTab('pages')" id="tab-btn-pages" class="flex-1 py-2 text-neon-400 border-b-2 border-neon-400 bg-white/5 flex items-center justify-center gap-1">PAGES <span id="total-pages" class="text-[10px] opacity-60">(0)</span></button>
-                        <button onclick="setLeftTab('layers')" id="tab-btn-layers" class="flex-1 py-2 text-slate-500 hover:text-white">LAYERS</button>
-                        <button onclick="setLeftTab('sigs')" id="tab-btn-sigs" class="flex-1 py-2 text-slate-500 hover:text-white">SIGS</button>
-                    </div>
-                    <div id="tab-pages" class="flex-1 flex flex-col overflow-hidden"><div class="flex-1 overflow-y-auto p-4 custom-scrollbar text-center" id="thumbnails-container"></div><div class="p-3 border-t border-white/10"><button onclick="addNewPage()" class="cyber-btn w-full py-2 text-xs flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="14"></i> ADD PAGE</button></div></div>
-                    <div id="tab-layers" class="flex-1 flex flex-col overflow-hidden hidden"><div id="layers-list" class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar"></div><div class="p-2 text-[10px] text-slate-500 text-center border-t border-white/5">Use arrows to reorder</div></div>
-                    <div id="tab-sigs" class="flex-1 flex flex-col overflow-hidden hidden"><div id="signatures-list" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar"></div><div class="p-3 border-t border-white/10"><button onclick="openSignatureModal()" class="cyber-btn w-full py-2 text-xs flex items-center justify-center gap-2"><i data-lucide="feather" width="14"></i> NEW SIGNATURE</button></div></div>
+            
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+                <div class="hidden sm:flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10">
+                    <i data-lucide="zoom-in" class="text-neon-400" width="14"></i>
+                    <span id="zoom-disp" class="text-xs font-mono text-neon-400">100%</span>
+                </div>
+                
+                <div class="flex gap-1 md:gap-2">
+                    <button onclick="undo()" class="cyber-btn p-2 rounded-lg" title="Undo (Ctrl+Z)">
+                        <i data-lucide="undo" width="16"></i>
+                    </button>
+                    <button onclick="redo()" class="cyber-btn p-2 rounded-lg" title="Redo (Ctrl+Shift+Z)">
+                        <i data-lucide="redo" width="16"></i>
+                    </button>
                 </div>
 
-                <div class="flex-1 overflow-hidden relative flex flex-col select-none w-full z-0">
-                    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center bg-black/60 backdrop-blur rounded-full px-3 py-1 border border-white/10 shadow-lg pointer-events-none">
-                        <i data-lucide="move" width="12" class="text-neon-400 mr-2"></i>
-                        <span class="text-[10px] text-slate-400 font-mono hidden sm:inline">DRAG TO PAN • PINCH TO ZOOM</span>
-                        <span id="zoom-disp" class="text-xs font-mono w-12 text-center text-white border-l border-white/10 ml-2 pl-2">100%</span>
+                <button id="export-btn" onclick="exportPDF()" class="cyber-btn px-3 md:px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-neon" title="Export PDF">
+                    <i data-lucide="download" width="16"></i>
+                    <span class="hidden sm:inline">EXPORT</span>
+                </button>
+                
+                <button onclick="toggleSidebar('right')" class="cyber-btn p-2 rounded-lg md:hidden" title="Properties">
+                    <i data-lucide="sliders" width="18"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 flex overflow-hidden">
+            <!-- Left Sidebar -->
+            <aside id="left-sidebar" class="cyber-panel w-72 md:w-80 flex-shrink-0 flex flex-col absolute md:relative h-full z-30 md:z-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+                <!-- Tabs -->
+                <div class="flex border-b border-white/10">
+                    <button id="tab-btn-pages" onclick="setLeftTab('pages')" class="flex-1 py-3 text-neon-400 border-b-2 border-neon-400 bg-white/5 flex items-center justify-center">
+                        <i data-lucide="layers" width="16" class="mr-2"></i>PAGES
+                    </button>
+                    <button id="tab-btn-layers" onclick="setLeftTab('layers')" class="flex-1 py-3 text-slate-500 hover:text-white flex items-center justify-center">
+                        <i data-lucide="stack" width="16" class="mr-2"></i>LAYERS
+                    </button>
+                    <button id="tab-btn-sigs" onclick="setLeftTab('sigs')" class="flex-1 py-3 text-slate-500 hover:text-white flex items-center justify-center">
+                        <i data-lucide="pen-tool" width="16" class="mr-2"></i>SIGS
+                    </button>
+                </div>
+
+                <!-- Pages Tab -->
+                <div id="tab-pages" class="flex-1 overflow-y-auto p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold text-neon-400 font-mono">PAGES <span id="total-pages" class="text-slate-500">(0)</span></h2>
+                        <button onclick="addNewPage()" class="cyber-btn p-2 rounded-lg" title="Add Page">
+                            <i data-lucide="plus" width="14"></i>
+                        </button>
                     </div>
-                    <div id="workspace" class="flex-1 relative cursor-grab active:cursor-grabbing touch-none w-full h-full">
-                        <div id="pan-container" class="absolute top-0 left-0">
-                            <div id="canvas-wrapper" class="relative shadow-2xl bg-white/5 transition-shadow duration-300">
-                                <div id="page-bg-layer" class="absolute inset-0 z-0 bg-white transition-colors duration-200"></div>
-                                <canvas id="pdf-render" class="block relative z-10 mix-blend-multiply"></canvas>
-                                <!-- Drawing canvas is now only for temporary strokes -->
-                                <canvas id="drawing-layer" class="absolute inset-0 touch-none z-20"></canvas>
+                    <div id="thumbnails-container" class="space-y-2"></div>
+                </div>
+
+                <!-- Layers Tab -->
+                <div id="tab-layers" class="flex-1 overflow-y-auto p-4 hidden">
+                    <h2 class="text-sm font-bold text-neon-400 font-mono mb-4">LAYER STACK</h2>
+                    <div id="layers-list" class="space-y-1"></div>
+                </div>
+
+                <!-- Signatures Tab -->
+                <div id="tab-sigs" class="flex-1 overflow-y-auto p-4 hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold text-neon-400 font-mono">SIGNATURES</h2>
+                        <button onclick="openSignatureModal()" class="cyber-btn p-2 rounded-lg" title="New Signature">
+                            <i data-lucide="plus" width="14"></i>
+                        </button>
+                    </div>
+                    <div id="signatures-list" class="space-y-2"></div>
+                </div>
+            </aside>
+
+            <!-- Workspace -->
+            <section id="workspace" class="flex-1 relative overflow-hidden bg-space touch-none">
+                <!-- Toolbar -->
+                <div class="absolute top-4 left-1/2 transform -translate-x-1/2 cyber-panel px-3 py-2 rounded-xl flex items-center gap-2 z-20 shadow-neon">
+                    <button onclick="setTool('select')" id="btn-select" class="cyber-btn active p-2 rounded" title="Select (V)"><i data-lucide="mouse-pointer-2" width="18"></i></button>
+                        <button onclick="setTool('pdftext')" id="btn-pdftext" class="cyber-btn p-2 rounded" title="Edit PDF Text (E)"><i data-lucide="scan-text" width="18"></i></button>
+                    <button onclick="setTool('draw')" id="btn-draw" class="cyber-btn p-2 rounded" title="Draw (D)"><i data-lucide="pencil" width="18"></i></button>
+                    <div class="w-px h-6 bg-white/20 mx-1"></div>
+                    <button onclick="addText()" class="cyber-btn p-2 rounded" title="Add Text (T)"><i data-lucide="type" width="18"></i></button>
+                    <button onclick="addRect()" class="cyber-btn p-2 rounded" title="Add Rectangle"><i data-lucide="square" width="18"></i></button>
+                    <button onclick="addHighlight()" class="cyber-btn p-2 rounded" title="Highlight"><i data-lucide="highlighter" width="18"></i></button>
+                    <button onclick="triggerImageUpload()" class="cyber-btn p-2 rounded" title="Add Image"><i data-lucide="image-plus" width="18"></i></button>
+                    <input type="file" id="img-upload" accept="image/*" class="hidden">
+                    <div class="w-px h-6 bg-white/20 mx-1 hidden md:block"></div>
+                    <button onclick="addStamp('APPROVED', '#00ff7f')" class="cyber-btn p-2 rounded hidden md:block" title="Approved Stamp"><i data-lucide="check-circle" width="18"></i></button>
+                    <button onclick="addStamp('REJECTED', '#ff3b3b')" class="cyber-btn p-2 rounded hidden md:block" title="Rejected Stamp"><i data-lucide="x-circle" width="18"></i></button>
+                </div>
+
+                <!-- Canvas Container -->
+                <div id="pan-container" class="absolute inset-0 transform-origin-top-left">
+                    <div id="canvas-wrapper" class="relative">
+                        <!-- Page BG Layer -->
+                        <div id="page-bg-layer" class="absolute inset-0 z-5"></div>
+
+                        <canvas id="pdf-canvas" class="block relative z-10 shadow-neon"></canvas>
+                        <canvas id="drawing-layer" class="absolute inset-0 touch-none z-20"></canvas>
+                                <div id="pdf-text-layer" class="absolute inset-0 overflow-hidden z-25"></div>
                                 <div id="overlay-layer" class="absolute inset-0 overflow-hidden z-30"></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
+            </section>
 
-                <div id="right-sidebar" class="sidebar-transition fixed md:static right-0 top-14 md:top-auto bottom-0 z-50 w-72 glass-panel border-l border-white/10 transform translate-x-full md:translate-x-0 hidden md:flex flex-col shrink-0 transform-gpu">
-                    <div class="p-3 border-b border-white/10 flex justify-between items-center bg-black/30"><span class="text-xs font-mono text-neon-400 tracking-widest">PROPERTIES</span><button onclick="toggleSidebar('right')" class="md:hidden text-slate-400 p-2"><i data-lucide="x" width="16"></i></button></div>
-                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
-                        <div id="draw-props" class="hidden p-2 space-y-4 border-b border-white/10 pb-4 mb-4">
-                            <div class="text-[10px] text-neon-600 font-mono uppercase tracking-widest">DRAW SETTINGS</div>
-                            <div class="space-y-2"><label class="text-[10px] text-slate-400 font-mono">Brush Color</label><div class="flex gap-2"><input type="color" id="draw-color-picker" value="#00f3ff" class="w-8 h-8 rounded border-none cursor-pointer" onchange="state.drawColor = this.value"></div></div>
-                            <div class="space-y-2"><label class="text-[10px] text-slate-400 font-mono">Brush Size</label><input type="range" min="1" max="20" value="2" class="w-full accent-neon-400 h-1 bg-slate-700 rounded" oninput="state.drawWidth = parseInt(this.value)"></div>
+            <!-- Right Sidebar -->
+            <aside id="right-sidebar" class="cyber-panel w-72 md:w-80 flex-shrink-0 flex flex-col absolute md:relative right-0 h-full z-30 md:z-0 transform translate-x-full md:translate-x-0 transition-transform duration-300 hidden md:flex">
+                <div class="p-4 border-b border-white/10">
+                    <h2 class="text-sm font-bold text-neon-400 font-mono flex items-center gap-2">
+                        <i data-lucide="sliders" width="16"></i>
+                        PROPERTIES
+                    </h2>
+                </div>
+
+                <div id="props-content" class="flex-1 overflow-y-auto p-4 space-y-6">
+                    <!-- No Selection -->
+                    <div id="no-selection" class="text-center text-slate-500 py-8">
+                        <i data-lucide="mouse-pointer-2" class="mx-auto mb-3 opacity-50" width="32"></i>
+                        <p class="text-sm">Select an element to edit properties</p>
+                    </div>
+
+                    <!-- Element Properties -->
+                    <div id="element-props" class="space-y-6 hidden">
+                        <!-- Position & Size -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Transform</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">X</label>
+                                    <input type="number" id="prop-x" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('x', parseFloat(this.value))">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Y</label>
+                                    <input type="number" id="prop-y" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('y', parseFloat(this.value))">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">W</label>
+                                    <input type="number" id="prop-w" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('width', parseFloat(this.value))">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">H</label>
+                                    <input type="number" id="prop-h" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('height', parseFloat(this.value))">
+                                </div>
+                            </div>
                         </div>
-                        <div id="props-empty" class="h-20 flex flex-col items-center justify-center text-slate-500 opacity-60"><span class="text-xs font-mono">NO ELEMENT SELECTED</span></div>
-                        <div id="props-content" class="hidden p-2 space-y-5">
-                            <div class="space-y-2" id="prop-color-group">
-                                <label class="text-[10px] text-neon-600 font-mono uppercase">Selection/Box Color</label>
-                                <div class="flex gap-2">
-                                    <input type="color" id="prop-color" class="w-8 h-8 rounded bg-transparent border border-white/20 cursor-pointer" onchange="updateProp('color', this.value)">
-                                    <input type="text" id="prop-color-hex" class="flex-1 bg-black/40 border border-white/10 rounded px-2 text-xs font-mono text-neon-400" onchange="updateProp('color', this.value)">
-                                </div>
+
+                        <!-- Style -->
+                        <div class="space-y-3" id="prop-color-group">
+                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Style</h3>
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Color</label>
+                                <input type="color" id="prop-color" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('color', this.value)">
                             </div>
-                            <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Opacity</label><div class="flex items-center gap-2"><input type="range" min="0" max="1" step="0.1" id="prop-opacity" class="flex-1 h-1 bg-slate-700 rounded-lg accent-neon-500" oninput="updateProp('opacity', parseFloat(this.value))"><span id="prop-opacity-val" class="text-xs font-mono text-white w-8 text-right">1.0</span></div></div>
-                            
-                            <!-- BORDER CONTROLS -->
-                            <div class="space-y-2 border-t border-white/10 pt-2">
-                                <label class="text-[10px] text-neon-600 font-mono uppercase">Border Settings</label>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="col-span-2 flex gap-2">
-                                         <input type="color" id="prop-border-color" class="w-8 h-8 rounded border-none cursor-pointer" onchange="updateProp('borderColor', this.value)">
-                                         <select id="prop-border-style" class="flex-1 bg-black/40 border border-white/10 rounded px-2 text-xs text-slate-300" onchange="updateProp('borderStyle', this.value)">
-                                             <option value="none">None</option>
-                                             <option value="solid">Solid</option>
-                                             <option value="dashed">Dashed</option>
-                                             <option value="dotted">Dotted</option>
-                                             <option value="double">Double</option>
-                                         </select>
-                                    </div>
-                                    <div class="flex items-center gap-1" title="Border Width"><span class="text-[8px] text-slate-400">W</span><input type="range" id="prop-border-width" min="0" max="20" class="flex-1 h-1 bg-slate-700 rounded accent-neon-500" oninput="updateProp('borderWidth', parseInt(this.value))"></div>
-                                    <div class="flex items-center gap-1" title="Border Radius (Shape)"><span class="text-[8px] text-slate-400">R</span><input type="range" id="prop-border-radius" min="0" max="50" class="flex-1 h-1 bg-slate-700 rounded accent-neon-500" oninput="updateProp('borderRadius', parseInt(this.value))"></div>
-                                </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Opacity</label>
+                                <input type="range" id="prop-opacity" min="0" max="1" step="0.05" class="w-full" onchange="updateProp('opacity', parseFloat(this.value))">
                             </div>
 
-                            <div id="prop-text-group" class="space-y-4 hidden border-t border-white/10 pt-2">
-                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Text Options</label>
-                                    <div class="flex gap-2">
-                                        <button onclick="toggleTextStyle('bold')" id="btn-bold" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20 font-bold text-xs">B</button>
-                                        <button onclick="toggleTextStyle('italic')" id="btn-italic" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20 italic text-xs">I</button>
-                                        <button onclick="toggleTextStyle('underline')" id="btn-underline" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20 underline text-xs">U</button>
+                            <div class="space-y-3 pt-3 border-t border-white/10">
+                                <h4 class="text-[10px] font-bold text-neon-500 font-mono uppercase">Border</h4>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-[10px] text-slate-500 font-mono uppercase">Style</label>
+                                        <select id="prop-border-style" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('borderStyle', this.value)">
+                                            <option value="none">None</option>
+                                            <option value="solid">Solid</option>
+                                            <option value="dashed">Dashed</option>
+                                            <option value="dotted">Dotted</option>
+                                        </select>
                                     </div>
-                                    <div class="flex gap-2 mt-2">
-                                        <button onclick="updateProp('textAlign', 'left')" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20"><i data-lucide="align-left" width="14" class="mx-auto"></i></button>
-                                        <button onclick="updateProp('textAlign', 'center')" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20"><i data-lucide="align-center" width="14" class="mx-auto"></i></button>
-                                        <button onclick="updateProp('textAlign', 'right')" class="flex-1 py-1 bg-white/10 rounded hover:bg-white/20"><i data-lucide="align-right" width="14" class="mx-auto"></i></button>
+                                    <div>
+                                        <label class="text-[10px] text-slate-500 font-mono uppercase">Width</label>
+                                        <input type="number" id="prop-border-width" min="0" max="20" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('borderWidth', parseFloat(this.value))">
                                     </div>
                                 </div>
-                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Font Size</label><div class="flex items-center gap-2"><input type="range" min="8" max="120" id="prop-size-slider" class="flex-1 h-1 bg-slate-700 rounded-lg accent-neon-500" oninput="updateProp('fontSize', parseInt(this.value))"><span id="prop-size-val" class="text-xs font-mono text-white w-8 text-right">16</span></div></div>
                                 <div class="space-y-2">
-                                    <label class="text-[10px] text-neon-600 font-mono uppercase">Font Family</label>
-                                    <select id="prop-font" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-white font-mono" onchange="updateProp('fontFamily', this.value)">
-                                        <option value="Helvetica">Helvetica (Standard)</option>
-                                        <option value="Times-Roman">Times New Roman (Standard)</option>
-                                        <option value="Courier">Courier (Standard)</option>
-                                        <option value="Roboto">Roboto</option>
-                                        <option value="Lobster">Lobster</option>
-                                        <option value="Dancing Script">Dancing Script</option>
-                                        <option value="Oswald">Oswald</option>
-                                        <option value="'Press Start 2P'">Pixel (Press Start 2P)</option>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Border Color</label>
+                                    <input type="color" id="prop-border-color" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('borderColor', this.value)">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Border Radius</label>
+                                    <input type="number" id="prop-border-radius" min="0" max="100" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('borderRadius', parseFloat(this.value))">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Text Properties -->
+                        <div class="space-y-3 hidden" id="prop-text-group">
+                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Text</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Size</label>
+                                    <input type="number" id="prop-font-size" min="8" max="200" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('fontSize', parseFloat(this.value))">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Font</label>
+                                    <select id="prop-font-family" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('fontFamily', this.value)">
+                                        <option value="Inter">Inter</option>
+                                        <option value="Helvetica">Helvetica</option>
+                                        <option value="Times-Roman">Times</option>
+                                        <option value="Courier">Courier</option>
                                     </select>
                                 </div>
-                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Text Background</label><div class="flex gap-2"><input type="color" id="prop-bg-color" class="w-8 h-8 rounded border-none cursor-pointer" onchange="updateProp('backgroundColor', this.value)"><button onclick="updateProp('backgroundColor', 'transparent')" class="text-[10px] text-slate-400 hover:text-white border border-white/20 px-2 rounded">Clear</button></div></div>
-                                <div class="space-y-2"><label class="text-[10px] text-neon-600 font-mono uppercase">Link URL</label><input type="text" id="prop-link" placeholder="https://..." class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('linkUrl', this.value)"></div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/5"><button onclick="duplicateSelected()" class="cyber-btn py-2 text-[10px]" title="Clone">DUPLICATE</button><button onclick="deleteSelected()" class="cyber-btn py-2 text-[10px] text-alert-500 border-alert-500/50" title="Remove">DELETE</button></div>
-                        </div>
-                        <div class="mt-4 border-t border-white/10 bg-white/5 p-4 rounded">
-                            <div class="text-[10px] font-mono text-neon-600 tracking-widest mb-3">PAGE ACTIONS</div>
-                            <div class="space-y-2 mb-3"><label class="text-[10px] text-slate-400 font-mono">Background Color</label><input type="color" id="page-bg-color" value="#ffffff" class="w-full h-8 rounded border-none cursor-pointer" oninput="updatePageBg(this.value)" onchange="addToHistory()"></div>
-                            <!-- PAGE BORDER CONTROLS -->
-                            <div class="space-y-2 mb-3 pt-2 border-t border-white/5">
-                                <label class="text-[10px] text-slate-400 font-mono">Page Border</label>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="col-span-2 flex gap-2">
-                                         <input type="color" id="page-border-color" class="w-8 h-8 rounded border-none cursor-pointer" onchange="updatePageProp('borderColor', this.value)">
-                                         <select id="page-border-style" class="flex-1 bg-black/40 border border-white/10 rounded px-2 text-xs text-slate-300" onchange="updatePageProp('borderStyle', this.value)">
-                                             <option value="none">None</option>
-                                             <option value="solid">Solid</option>
-                                             <option value="dashed">Dashed</option>
-                                             <option value="dotted">Dotted</option>
-                                             <option value="double">Double</option>
-                                         </select>
+                            
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Align</label>
+                                <select id="prop-text-align" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('textAlign', this.value)">
+                                    <option value="left">Left</option>
+                                    <option value="center">Center</option>
+                                    <option value="right">Right</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex gap-2">
+                                <button onclick="toggleTextStyle('bold')" class="cyber-btn flex-1 py-2 rounded text-xs font-mono" id="btn-bold">
+                                    <i data-lucide="bold" width="14" class="mx-auto"></i>
+                                </button>
+                                <button onclick="toggleTextStyle('italic')" class="cyber-btn flex-1 py-2 rounded text-xs font-mono" id="btn-italic">
+                                    <i data-lucide="italic" width="14" class="mx-auto"></i>
+                                </button>
+                                <button onclick="toggleTextStyle('underline')" class="cyber-btn flex-1 py-2 rounded text-xs font-mono" id="btn-underline">
+                                    <i data-lucide="underline" width="14" class="mx-auto"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Background</label>
+                                <input type="color" id="prop-bg-color" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('backgroundColor', this.value)">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-neon-600 font-mono uppercase">Link URL</label>
+                                <input type="text" id="prop-link" placeholder="https://..." class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('linkUrl', this.value)">
+                            </div>
+
+                            <div id="prop-pdfedit-group" class="space-y-3 pt-3 border-t border-white/10 hidden">
+                                <h4 class="text-[10px] font-bold text-neon-500 font-mono uppercase">PDF Text Replace</h4>
+                                <label class="flex items-center gap-2 text-xs text-slate-300">
+                                    <input type="checkbox" id="prop-redact" class="accent-neon-400" onchange="updateProp('redact', this.checked)">
+                                    <span>Redact original text</span>
+                                </label>
+                                <div class="space-y-2">
+                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Redact Color</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="color" id="prop-redact-color" class="flex-1 h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('redactColor', this.value)">
+                                        <button class="cyber-btn px-3 py-2 rounded text-[10px] font-mono" onclick="updateProp('redactColor','auto')">AUTO</button>
                                     </div>
-                                    <div class="flex items-center gap-1 col-span-2"><span class="text-[8px] text-slate-400">Width</span><input type="range" id="page-border-width" min="0" max="50" class="flex-1 h-1 bg-slate-700 rounded accent-neon-500" oninput="updatePageProp('borderWidth', parseInt(this.value))"></div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 mb-2"><button onclick="rotatePage(-90)" class="cyber-btn py-2 flex items-center justify-center gap-1 text-[10px]"><i data-lucide="rotate-ccw" width="12"></i> LEFT</button><button onclick="rotatePage(90)" class="cyber-btn py-2 flex items-center justify-center gap-1 text-[10px]"><i data-lucide="rotate-cw" width="12"></i> RIGHT</button></div>
-                            <button onclick="deleteCurrentPage()" class="cyber-btn w-full py-2 text-alert-500 border-alert-500/30 text-[10px] flex items-center justify-center gap-2 hover:bg-alert-500/10"><i data-lucide="trash" width="12"></i> DELETE PAGE</button>
+                        </div>
+
+                        <!-- Draw Properties -->
+                        <div class="space-y-3 hidden" id="draw-props">
+                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Draw Tool</h3>
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Stroke Color</label>
+                                <input type="color" id="draw-color" value="#00f3ff" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="state.drawColor=this.value">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Stroke Width</label>
+                                <input type="range" id="draw-width" min="1" max="20" value="2" class="w-full" onchange="state.drawWidth=parseFloat(this.value)">
+                            </div>
+                        </div>
+
+                        <!-- Page Properties -->
+                        <div class="space-y-3 pt-6 border-t border-white/10">
+                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Page</h3>
+                            <div class="space-y-2">
+                                <label class="text-[10px] text-slate-500 font-mono uppercase">Background</label>
+                                <input type="color" id="page-bg-color" value="#ffffff" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updatePageBg(this.value); updatePageProp('bgColor', this.value)">
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-3">
+                                <button onclick="rotatePage(90)" class="cyber-btn py-2 rounded text-xs font-mono flex items-center justify-center gap-1">
+                                    <i data-lucide="rotate-cw" width="14"></i> ROTATE
+                                </button>
+                                <button onclick="deleteCurrentPage()" class="cyber-btn py-2 rounded text-xs font-mono flex items-center justify-center gap-1 text-alert-500">
+                                    <i data-lucide="trash" width="14"></i> DELETE
+                                </button>
+                            </div>
+                            
+                            <button onclick="resetView()" class="cyber-btn w-full py-2 rounded text-xs font-mono flex items-center justify-center gap-1">
+                                <i data-lucide="maximize-2" width="14"></i> FIT TO SCREEN
+                            </button>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="space-y-2 pt-6 border-t border-white/10">
+                            <button onclick="duplicateSelected()" class="cyber-btn w-full py-2 rounded text-xs font-mono flex items-center justify-center gap-2">
+                                <i data-lucide="copy" width="14"></i> DUPLICATE
+                            </button>
+                            <button onclick="deleteSelected()" class="cyber-btn w-full py-2 rounded text-xs font-mono flex items-center justify-center gap-2 text-alert-500">
+                                <i data-lucide="trash" width="14"></i> DELETE
+                            </button>
                         </div>
                     </div>
                 </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Signature Modal -->
+    <div id="sig-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="cyber-panel w-full max-w-lg rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-neon-400 font-mono">CREATE SIGNATURE</h3>
+                <button onclick="document.getElementById('sig-modal').classList.add('hidden')" class="cyber-btn p-2 rounded-lg">
+                    <i data-lucide="x" width="16"></i>
+                </button>
+            </div>
+            <div class="bg-white rounded-xl p-2 mb-4">
+                <canvas id="sig-canvas" class="w-full h-40"></canvas>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="clearSig()" class="cyber-btn flex-1 py-3 rounded-xl font-semibold">CLEAR</button>
+                <button onclick="saveSig()" class="cyber-btn flex-1 py-3 rounded-xl font-semibold text-neon-600">SAVE</button>
             </div>
         </div>
     </div>
 
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 hidden">
+        <div class="cyber-panel px-6 py-3 rounded-xl text-sm font-mono text-neon-400 shadow-neon">
+            <span id="toast-message"></span>
+        </div>
+    </div>
+
     <script>
-        // --- 1. GLOBAL VARIABLES & STATE ---
-        var canvas = document.getElementById('pdf-render');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        const fontkit = window.fontkit;
+
+        // --- UTILITIES ---
+        function hexToRgb(hex) {
+            hex = hex.replace('#','');
+            if(hex.length===3) hex = hex.split('').map(x=>x+x).join('');
+            const num = parseInt(hex,16);
+            return PDFLib.rgb(((num>>16)&255)/255, ((num>>8)&255)/255, (num&255)/255);
+        }
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2500);
+        }
+
+        function initIcons() { lucide.createIcons(); }
+
+        // --- STATE ---
+        const state = {
+            pdfBytes: null,
+            pdfDoc: null,
+            pages: [], 
+            currentPage: 1,
+            currentViewport: null,
+            scale: 1.5,
+            zoom: 1,
+            pan: {x: 0, y: 0},
+            
+            elements: [],
+            selectedId: null,
+            tool: 'select',
+            isEditingText: false,
+
+            history: [],
+            historyStep: -1,
+
+            drawColor: '#00f3ff', drawWidth: 2,
+            pdfTextRuns: {}, pdfTextSpans: {}, pdfTextReady: {},
+            pdfTextMode: false
+        };
+
+        var canvas = document.getElementById('pdf-canvas');
         var ctx = canvas.getContext('2d');
         var drawCanvas = document.getElementById('drawing-layer');
         var drawCtx = drawCanvas.getContext('2d');
+
         var overlay = document.getElementById('overlay-layer');
+        var pdfTextLayer = document.getElementById('pdf-text-layer');
+        var workspace = document.getElementById('workspace');
         var canvasWrapper = document.getElementById('canvas-wrapper');
         
-        var state = {
-            pdfDoc: null, pdfBytes: null, currentViewport: null, renderTask: null,
-            scale: 1.5, zoom: 1.0, pan: { x: 0, y: 0 },
-            currentPage: 1, tool: 'select',
-            pages: [], elements: [], history: [], historyStep: -1,
-            selectedId: null, isEditingText: false,
-            drawColor: '#00f3ff', drawWidth: 2
-        };
-        var savedSignatures = JSON.parse(localStorage.getItem('omni_signatures') || '[]');
-        var dragAction = null, isPanning = false, panStart = {x:0, y:0}, isDrawing = false, currentPath = null;
+        var dragAction = null, isPanning = false, panStart = {x:0, y:0}, isPinching = false, pinchStartDist = 0, pinchStartZoom = 1, pinchWorld = {x:0, y:0}, isDrawing = false, currentPath = null;
+        var savedSignatures = JSON.parse(localStorage.getItem('omni_signatures')||'[]');
 
-        // --- 2. FUNCTION DECLARATIONS ---
-
-        function initIcons() { lucide.createIcons(); }
-        function createId() { return 'EL-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
-        function hexToRgb(hex) { if(!hex || hex === 'transparent') return undefined; const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); const {rgb}=PDFLib; return r?rgb(parseInt(r[1],16)/255, parseInt(r[2],16)/255, parseInt(r[3],16)/255):rgb(0,0,0); }
-        function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.classList.remove('translate-y-20', 'opacity-0'); setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 2000); }
-
-        function initDrag(e, el, type) {
-            e.preventDefault();
-            const cx = e.touches ? e.touches[0].clientX : e.clientX;
-            const cy = e.touches ? e.touches[0].clientY : e.clientY;
-            dragAction = { type, el, startX: cx, startY: cy, origX: el.x, origY: el.y, origW: el.width, origH: el.height };
-        }
-
-        function handleMove(cx, cy) {
-            const dx = (cx - dragAction.startX) / state.zoom;
-            const dy = (cy - dragAction.startY) / state.zoom;
-            if(dragAction.type === 'move') { dragAction.el.x = dragAction.origX + dx; dragAction.el.y = dragAction.origY + dy; }
-            else if (dragAction.type === 'resize') {
-                let newW = Math.max(20, dragAction.origW + dx), newH = Math.max(20, dragAction.origH + dy);
-                if(dragAction.el.subtype === 'signature' || dragAction.el.aspectRatio) {
-                    const ratio = dragAction.el.aspectRatio || (dragAction.origW / dragAction.origH);
-                    if(Math.abs(dx) > Math.abs(dy)) newH = newW / ratio; else newW = newH * ratio;
-                }
-                dragAction.el.width = newW; dragAction.el.height = newH;
-            }
-            renderElements();
-        }
-
-        function getDrawCoords(e) {
-            const rect = drawCanvas.getBoundingClientRect();
-            const cx = e.touches ? e.touches[0].clientX : e.clientX;
-            const cy = e.touches ? e.touches[0].clientY : e.clientY;
-            return { x: (cx - rect.left) * (drawCanvas.width / rect.width), y: (cy - rect.top) * (drawCanvas.height / rect.height) };
-        }
-
-        function startDraw(e) {
-            if(state.tool !== 'draw') return;
-            e.preventDefault(); isDrawing = true;
-            const c = getDrawCoords(e);
-            currentPath = { color: state.drawColor, width: state.drawWidth, points: [c] };
-            drawCtx.beginPath(); drawCtx.moveTo(c.x, c.y); drawCtx.strokeStyle = state.drawColor; drawCtx.lineWidth = state.drawWidth; drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
-        }
-
-        function draw(e) {
-            if(!isDrawing || state.tool !== 'draw') return;
-            e.preventDefault(); const c = getDrawCoords(e);
-            currentPath.points.push(c); drawCtx.lineTo(c.x, c.y); drawCtx.stroke();
-        }
-
-        function endDraw() {
-            if(!isDrawing) return; isDrawing = false;
-            drawCtx.clearRect(0,0,drawCanvas.width, drawCanvas.height);
-            if(currentPath && currentPath.points.length > 1) {
-                const xs = currentPath.points.map(p => p.x);
-                const ys = currentPath.points.map(p => p.y);
-                const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-                const w = Math.max(20, maxX - minX), h = Math.max(20, maxY - minY);
-                const normPoints = currentPath.points.map(p => ({ x: p.x - minX, y: p.y - minY }));
-                const newEl = {
-                    id: createId(), type: 'draw', page: state.currentPage,
-                    x: minX, y: minY, width: w, height: h, originalWidth: w, originalHeight: h,
-                    points: normPoints, color: currentPath.color, strokeWidth: currentPath.width, opacity: 1
-                };
-                state.elements.push(newEl); selectElement(newEl.id); renderElements(); addToHistory();
-            }
-            currentPath = null;
-        }
-
-        function updatePropsPanel() {
-            const panel = document.getElementById('props-content'), empty = document.getElementById('props-empty'), el = state.elements.find(e => e.id === state.selectedId);
-            const pageData = state.pages[state.currentPage - 1];
-
-            // Page Props
-            if(pageData) {
-                document.getElementById('page-border-color').value = pageData.borderColor || '#000000';
-                document.getElementById('page-border-style').value = pageData.borderStyle || 'none';
-                document.getElementById('page-border-width').value = pageData.borderWidth || 0;
-            }
-
-            if(!el) { panel.classList.add('hidden'); empty.classList.remove('hidden'); return; }
-            panel.classList.remove('hidden'); empty.classList.add('hidden');
-            
-            if(el.color) { document.getElementById('prop-color').value = el.color; document.getElementById('prop-color-hex').value = el.color; }
-            document.getElementById('prop-opacity').value = el.opacity || 1;
-            document.getElementById('prop-opacity-val').innerText = el.opacity || 1;
-            
-            // Border Props
-            document.getElementById('prop-border-color').value = el.borderColor || '#000000';
-            document.getElementById('prop-border-style').value = el.borderStyle || 'none';
-            document.getElementById('prop-border-width').value = el.borderWidth || 0;
-            document.getElementById('prop-border-radius').value = el.borderRadius || 0;
-
-            if(el.type === 'text') { 
-                document.getElementById('prop-text-group').classList.remove('hidden'); 
-                document.getElementById('prop-size-slider').value = el.fontSize; 
-                document.getElementById('prop-size-val').innerText = el.fontSize; 
-                document.getElementById('prop-font').value = el.fontFamily; 
-                document.getElementById('prop-bg-color').value = el.backgroundColor || '#ffffff';
-                document.getElementById('prop-link').value = el.linkUrl || '';
-            } else { 
-                document.getElementById('prop-text-group').classList.add('hidden'); 
-            }
-        }
-
+        // --- RENDERING ---
         function renderElements() {
             overlay.innerHTML = '';
-            const pageEls = state.elements.filter(el => el.page === state.currentPage);
-            pageEls.forEach(el => {
+            const currentEls = state.elements.filter(e => e.page === state.currentPage);
+
+            currentEls.forEach(el => {
                 const div = document.createElement('div');
-                div.className = `overlay-el ${state.selectedId === el.id ? 'selected' : ''}`;
-                if(state.isEditingText && state.selectedId === el.id) div.classList.add('editing');
-                div.style.left = el.x + 'px'; div.style.top = el.y + 'px'; div.style.width = el.width + 'px'; div.style.height = el.height + 'px'; div.style.opacity = el.opacity;
-                
-                // Border Styling
+                div.className = 'overlay-el';
+                div.dataset.id = el.id;
+                div.style.left = el.x + 'px';
+                div.style.top = el.y + 'px';
+                div.style.width = el.width + 'px';
+                div.style.height = el.height + 'px';
+                div.style.opacity = el.opacity ?? 1;
+
+                // Border styles
                 if (el.borderStyle && el.borderStyle !== 'none') {
-                    div.style.borderStyle = el.borderStyle;
-                    div.style.borderWidth = (el.borderWidth || 1) + 'px';
-                    div.style.borderColor = el.borderColor || '#000';
-                    div.style.borderRadius = (el.borderRadius || 0) + 'px';
+                    div.style.border = `${el.borderWidth || 1}px ${el.borderStyle} ${el.borderColor || '#00f3ff'}`;
+                } else {
+                    div.style.border = '1px solid transparent';
                 }
+                div.style.borderRadius = (el.borderRadius || 0) + 'px';
 
-                if(el.type === 'text') {
-                    const shield = document.createElement('div'); shield.className = 'text-shield';
-                    shield.ondblclick = (e) => { e.stopPropagation(); e.preventDefault(); state.isEditingText = true; renderElements(); };
-                    div.appendChild(shield);
-                    
-                    const ta = document.createElement('div'); 
-                    ta.className = 'text-content-area'; 
-                    ta.innerHTML = el.content;
-                    ta.contentEditable = (state.selectedId === el.id && state.isEditingText);
-                    
-                    ta.style.fontSize = el.fontSize + 'px'; 
-                    ta.style.fontFamily = el.fontFamily; 
-                    ta.style.color = el.color; 
-                    ta.style.lineHeight = '1.2';
-                    ta.style.textAlign = el.textAlign || 'left';
-                    
-                    // Basic styles fallback for entire box if no selection
-                    if(el.isBold) ta.style.fontWeight = 'bold';
-                    if(el.isItalic) ta.style.fontStyle = 'italic';
-                    if(el.isUnderline) ta.style.textDecoration = 'underline';
-                    if (el.backgroundColor) ta.style.backgroundColor = el.backgroundColor;
-                    if(el.isStamp) { ta.style.border = `3px solid ${el.color}`; ta.style.borderRadius = '4px'; ta.style.fontWeight = 'bold'; ta.style.textAlign = 'center'; ta.style.paddingTop = '5px'; }
-                    
-                    ta.oninput = (e) => { 
-                        el.content = e.target.innerHTML;
-                        requestAnimationFrame(() => {
-                            el.width = Math.max(50, ta.scrollWidth + 10);
-                            el.height = Math.max(el.fontSize, ta.scrollHeight);
-                            div.style.width = el.width + 'px'; div.style.height = el.height + 'px';
-                        });
-                    };
-                    ta.onblur = () => { state.isEditingText = false; renderElements(); addToHistory(); };
-                    div.appendChild(ta); 
-                    if(state.isEditingText && state.selectedId === el.id) setTimeout(() => ta.focus(), 10);
-                } 
-                else if(el.type === 'rect') { div.style.backgroundColor = el.color; }
-                else if(el.type === 'image') { 
-                    const img = document.createElement('img'); img.src = el.content; img.className = 'w-full h-full object-contain pointer-events-none'; 
-                    if(el.borderRadius) img.style.borderRadius = (el.borderRadius-2)+'px'; // adjust for border
-                    div.appendChild(img); 
-                }
-                else if (el.type === 'draw') {
-                    const cvs = document.createElement('canvas');
-                    cvs.width = el.width; cvs.height = el.height;
-                    cvs.className = 'w-full h-full pointer-events-none';
-                    const c = cvs.getContext('2d');
-                    const sx = el.width / el.originalWidth, sy = el.height / el.originalHeight;
-                    c.scale(sx, sy);
-                    c.beginPath(); c.strokeStyle = el.color; c.lineWidth = el.strokeWidth;
-                    c.lineCap = 'round'; c.lineJoin = 'round';
-                    if(el.points.length > 0) {
-                        c.moveTo(el.points[0].x, el.points[0].y);
-                        for(let i=1; i<el.points.length; i++) c.lineTo(el.points[i].x, el.points[i].y);
-                        c.stroke();
+                if (el.id === state.selectedId) div.classList.add('selected');
+
+                if (el.type === 'rect') {
+                    div.style.background = el.color;
+                } else if (el.type === 'text') {
+                    div.style.background = el.backgroundColor || 'transparent';
+                    const textArea = document.createElement('div');
+                    textArea.className = 'text-content-area';
+                    textArea.contentEditable = (el.id === state.selectedId && state.isEditingText);
+                    textArea.style.fontFamily = el.fontFamily;
+                    textArea.style.fontSize = el.fontSize + 'px';
+                    textArea.style.color = el.color;
+                    textArea.style.fontWeight = el.isBold ? 'bold' : 'normal';
+                    textArea.style.fontStyle = el.isItalic ? 'italic' : 'normal';
+                    textArea.style.textDecoration = el.isUnderline ? 'underline' : 'none';
+                    textArea.style.textAlign = el.textAlign || 'left';
+                    textArea.innerHTML = el.content;
+
+                    if (el.id === state.selectedId && state.isEditingText) {
+                        div.classList.add('editing');
+                        setTimeout(() => { textArea.focus(); }, 10);
+                        textArea.onblur = () => { el.content = textArea.innerHTML; state.isEditingText = false; renderElements(); addToHistory(); };
+                        textArea.oninput = () => { el.content = textArea.innerHTML; };
+                        textArea.onmousedown = (e) => e.stopPropagation();
+                        textArea.ontouchstart = (e) => e.stopPropagation();
                     }
-                    div.appendChild(cvs);
+                    div.appendChild(textArea);
+                } else if (el.type === 'image') {
+                    const img = document.createElement('img');
+                    img.src = el.content;
+                    img.style.width = '100%'; img.style.height = '100%';
+                    img.style.borderRadius = (el.borderRadius || 0) + 'px';
+                    img.style.objectFit = 'contain';
+                    div.appendChild(img);
+                } else if (el.type === 'draw') {
+                    const pathCanvas = document.createElement('canvas');
+                    pathCanvas.width = el.width;
+                    pathCanvas.height = el.height;
+                    pathCanvas.style.width = '100%';
+                    pathCanvas.style.height = '100%';
+                    const pCtx = pathCanvas.getContext('2d');
+                    pCtx.strokeStyle = el.color;
+                    pCtx.lineWidth = el.strokeWidth;
+                    pCtx.lineCap = 'round';
+                    pCtx.beginPath();
+                    if(el.points.length > 0) {
+                        pCtx.moveTo(el.points[0].x * (el.width/el.originalWidth), el.points[0].y * (el.height/el.originalHeight));
+                        for(let i=1; i<el.points.length; i++) {
+                            pCtx.lineTo(el.points[i].x * (el.width/el.originalWidth), el.points[i].y * (el.height/el.originalHeight));
+                        }
+                    }
+                    pCtx.stroke();
+                    div.appendChild(pathCanvas);
                 }
 
-                if(state.selectedId === el.id && !state.isEditingText) {
-                    const handle = document.createElement('div'); handle.className = 'resize-handle';
-                    handle.onmousedown = (e) => { e.stopPropagation(); initDrag(e, el, 'resize'); };
-                    handle.ontouchstart = (e) => { e.stopPropagation(); initDrag(e, el, 'resize'); };
+                // Links show subtle cursor
+                if (el.linkUrl) div.style.cursor = 'pointer';
+
+                // Resize handle
+                if (el.id === state.selectedId && state.tool === 'select') {
+                    const handle = document.createElement('div');
+                    handle.className = 'resize-handle';
                     div.appendChild(handle);
+                    handle.addEventListener('mousedown', e => { e.stopPropagation(); startResize(e, el); });
+                    handle.addEventListener('touchstart', e => { e.stopPropagation(); startResize(e.touches[0], el); }, {passive:false});
                 }
-                div.onmousedown = (e) => { if(state.isEditingText) return; e.stopPropagation(); if(state.selectedId !== el.id) { selectElement(el.id); renderElements(); } initDrag(e, el, 'move'); };
-                div.ontouchstart = (e) => { if(state.isEditingText) return; e.stopPropagation(); if(state.selectedId !== el.id) { selectElement(el.id); renderElements(); } initDrag(e, el, 'move'); };
+
+                div.addEventListener('mousedown', e => { if(state.tool==='select') onElementMouseDown(e, el); });
+                div.addEventListener('touchstart', e => { if(state.tool==='select') onElementMouseDown(e.touches[0], el); }, {passive:false});
+
+                div.addEventListener('dblclick', e => {
+                    if(el.type === 'text' && el.id === state.selectedId) {
+                        state.isEditingText = true;
+                        renderElements();
+                    }
+                });
+
+                // Click link
+                div.addEventListener('click', e => {
+                    if(el.linkUrl && !dragAction && el.id === state.selectedId && !state.isEditingText) {
+                        window.open(el.linkUrl, '_blank');
+                    }
+                });
+                
                 overlay.appendChild(div);
             });
+
             renderLayers();
+            syncPdfTextSelection();
+        }
+
+        // --- PDF TEXT EDITING (existing PDF text) ---
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function mapFontFamily(cssFamily) {
+            const f = (cssFamily || '').toLowerCase();
+            if (f.includes('courier')) return 'Courier';
+            if (f.includes('times')) return 'Times-Roman';
+            return 'Helvetica';
+        }
+
+        function setPdfTextMode(on) {
+            state.pdfTextMode = !!on;
+            if (pdfTextLayer) pdfTextLayer.classList.toggle('active', !!on);
+        }
+
+        async function renderPdfTextLayerForPage(page, viewport, pageNum) {
+            if (!pdfTextLayer) return;
+            pdfTextLayer.innerHTML = '';
+            state.pdfTextRuns[pageNum] = [];
+            state.pdfTextSpans[pageNum] = {};
+            state.pdfTextReady[pageNum] = false;
+
+            try {
+                const textContent = await page.getTextContent({ normalizeWhitespace: true });
+                const textDivs = [];
+                const task = pdfjsLib.renderTextLayer({
+                    textContent,
+                    container: pdfTextLayer,
+                    viewport,
+                    textDivs,
+                    enhanceTextSelection: false,
+                });
+                await (task && task.promise ? task.promise : task);
+
+                const wrapperRect = canvasWrapper.getBoundingClientRect();
+                const scale = wrapperRect.width ? (canvas.width / wrapperRect.width) : 1;
+
+                for (let i = 0; i < textDivs.length; i++) {
+                    const div = textDivs[i];
+                    if (!div) continue;
+                    div.classList.add('pdf-text-run');
+                    const rid = `PT-${pageNum}-${i}`;
+                    div.dataset.runId = rid;
+
+                    const r = div.getBoundingClientRect();
+                    const x = (r.left - wrapperRect.left) * scale;
+                    const y = (r.top - wrapperRect.top) * scale;
+                    const w = r.width * scale;
+                    const h = r.height * scale;
+                    const cs = getComputedStyle(div);
+                    const fs = parseFloat(cs.fontSize || '16') * scale;
+                    const ff = cs.fontFamily || 'Helvetica';
+
+                    state.pdfTextRuns[pageNum].push({
+                        id: rid,
+                        page: pageNum,
+                        text: div.textContent || '',
+                        x, y, width: w, height: h,
+                        fontSize: fs,
+                        fontFamily: ff,
+                    });
+                    state.pdfTextSpans[pageNum][rid] = div;
+                }
+                state.pdfTextReady[pageNum] = true;
+                syncPdfTextSelection();
+            } catch (err) {
+                console.warn('PDF text layer render failed', err);
+            }
+        }
+
+        function syncPdfTextSelection() {
+            const spans = state.pdfTextSpans[state.currentPage];
+            if (!spans) return;
+            Object.values(spans).forEach(s => s && s.classList.remove('selected'));
+            const sel = state.elements.find(e => e.id === state.selectedId);
+            if (sel && sel.subtype === 'pdf-edit' && sel.pdfTextRunId && spans[sel.pdfTextRunId]) {
+                spans[sel.pdfTextRunId].classList.add('selected');
+            }
+        }
+
+        function startPdfTextEditByRunId(runId) {
+            const runs = state.pdfTextRuns[state.currentPage] || [];
+            const run = runs.find(r => r.id === runId);
+            if (!run) return;
+
+            let el = state.elements.find(e => e.page === state.currentPage && e.subtype === 'pdf-edit' && e.pdfTextRunId === runId);
+            if (!el) {
+                const pageData = state.pages[state.currentPage - 1] || { bgColor: '#ffffff' };
+                const fontFamily = mapFontFamily(run.fontFamily);
+                const fontSize = Math.max(8, Math.round(run.fontSize || 16));
+
+                el = {
+                    id: createId(),
+                    page: state.currentPage,
+                    type: 'text',
+                    subtype: 'pdf-edit',
+                    pdfTextRunId: runId,
+                    x: Math.max(0, run.x - 4),
+                    y: Math.max(0, run.y - 4),
+                    width: Math.max(20, run.width + 8),
+                    height: Math.max(fontSize * 1.2, run.height + 8),
+                    opacity: 1,
+                    content: escapeHtml(run.text || ''),
+                    fontSize,
+                    fontFamily,
+                    color: '#000000',
+                    textAlign: 'left',
+                    backgroundColor: pageData.bgColor || '#ffffff',
+                    redact: true,
+                    redactColor: 'auto',
+                };
+
+                state.elements.push(el);
+                addToHistory();
+            }
+
+            selectElement(el.id);
+            state.isEditingText = true;
+            renderElements();
+            if (window.innerWidth < 768) toggleSidebar('right', true);
+        }
+
+        function handlePdfTextPointerDown(e) {
+            if (state.tool !== 'pdftext') return;
+            const target = e.target && e.target.closest ? e.target.closest('.pdf-text-run') : null;
+            if (!target) return;
+            e.preventDefault();
+            e.stopPropagation();
+            startPdfTextEditByRunId(target.dataset.runId);
         }
 
         function renderLayers() {
@@ -685,6 +923,7 @@
             
             state.renderTask = page.render({ canvasContext: ctx, viewport: vp });
             try { await state.renderTask.promise; } catch(e) {} finally { state.renderTask = null; }
+            await renderPdfTextLayerForPage(page, vp, num);
             renderElements(); updatePropsPanel(); renderThumbnails();
         }
 
@@ -776,6 +1015,184 @@
         window.moveLayer = function(id, d) { const idx = state.elements.findIndex(e => e.id === id); if(idx < 0) return; const newIdx = idx + d; if(newIdx>=0 && newIdx<state.elements.length && state.elements[newIdx].page===state.elements[idx].page) { [state.elements[idx], state.elements[newIdx]] = [state.elements[newIdx], state.elements[idx]]; renderElements(); addToHistory(); } };
         window.deleteLayer = function(id) { state.elements = state.elements.filter(e => e.id !== id); if(state.selectedId === id) { state.selectedId = null; updatePropsPanel(); } renderElements(); addToHistory(); };
 
+        function updatePropsPanel() {
+            const elProps = document.getElementById('element-props');
+            const noSel = document.getElementById('no-selection');
+            const textGroup = document.getElementById('prop-text-group');
+            const colorGroup = document.getElementById('prop-color-group');
+            if(!state.selectedId) { elProps.classList.add('hidden'); noSel.classList.remove('hidden'); return; }
+            const el = state.elements.find(e=>e.id===state.selectedId);
+            if(!el) return;
+            elProps.classList.remove('hidden'); noSel.classList.add('hidden');
+
+            // Common
+            document.getElementById('prop-x').value = Math.round(el.x);
+            document.getElementById('prop-y').value = Math.round(el.y);
+            document.getElementById('prop-w').value = Math.round(el.width);
+            document.getElementById('prop-h').value = Math.round(el.height);
+            document.getElementById('prop-opacity').value = el.opacity ?? 1;
+
+            // Borders
+            document.getElementById('prop-border-style').value = el.borderStyle || 'none';
+            document.getElementById('prop-border-width').value = el.borderWidth || 1;
+            document.getElementById('prop-border-color').value = el.borderColor || '#00f3ff';
+            document.getElementById('prop-border-radius').value = el.borderRadius || 0;
+
+            // Style group
+            if(el.type === 'rect' || el.type === 'text' || el.type === 'draw') {
+                colorGroup.classList.remove('hidden');
+                document.getElementById('prop-color').value = el.color || '#00f3ff';
+            } else {
+                colorGroup.classList.add('hidden');
+            }
+
+            // Text group
+            if(el.type === 'text') {
+                textGroup.classList.remove('hidden');
+                document.getElementById('prop-font-size').value = el.fontSize || 24;
+                document.getElementById('prop-font-family').value = el.fontFamily || 'Inter';
+                document.getElementById('prop-text-align').value = el.textAlign || 'left';
+                document.getElementById('prop-bg-color').value = el.backgroundColor || '#000000';
+                document.getElementById('prop-link').value = el.linkUrl || '';
+
+                // PDF text edit extras
+                const pdfGrp = document.getElementById('prop-pdfedit-group');
+                if (el.subtype === 'pdf-edit') {
+                    pdfGrp.classList.remove('hidden');
+                    document.getElementById('prop-redact').checked = !!el.redact;
+                    const pageBg = (state.pages[state.currentPage-1] && state.pages[state.currentPage-1].bgColor) ? state.pages[state.currentPage-1].bgColor : '#ffffff';
+                    document.getElementById('prop-redact-color').value = (el.redactColor && el.redactColor !== 'auto') ? el.redactColor : pageBg;
+                } else {
+                    pdfGrp.classList.add('hidden');
+                }
+            } else {
+                textGroup.classList.add('hidden');
+                document.getElementById('prop-pdfedit-group').classList.add('hidden');
+            }
+
+            // Text style button indicators
+            const bBold = document.getElementById('btn-bold');
+            const bIt = document.getElementById('btn-italic');
+            const bUnd = document.getElementById('btn-underline');
+            bBold.classList.toggle('active', !!el.isBold);
+            bIt.classList.toggle('active', !!el.isItalic);
+            bUnd.classList.toggle('active', !!el.isUnderline);
+        }
+
+        // --- Dragging and Resizing ---
+        function onElementMouseDown(e, el) {
+            e.preventDefault();
+            if(state.isEditingText) return;
+
+            selectElement(el.id);
+            renderElements();
+            dragAction = { type: 'move', id: el.id };
+            dragAction.startX = e.clientX;
+            dragAction.startY = e.clientY;
+            dragAction.origX = el.x;
+            dragAction.origY = el.y;
+        }
+        function startResize(e, el) {
+            dragAction = { type: 'resize', id: el.id };
+            dragAction.startX = e.clientX;
+            dragAction.startY = e.clientY;
+            dragAction.origW = el.width;
+            dragAction.origH = el.height;
+        }
+
+        function handleMove(clientX, clientY) {
+            if(!dragAction) return;
+            const el = state.elements.find(x => x.id === dragAction.id);
+            if(!el) return;
+            const dx = (clientX - dragAction.startX) / state.zoom;
+            const dy = (clientY - dragAction.startY) / state.zoom;
+
+            if(dragAction.type === 'move') {
+                el.x = dragAction.origX + dx;
+                el.y = dragAction.origY + dy;
+            } else if(dragAction.type === 'resize') {
+                el.width = Math.max(20, dragAction.origW + dx);
+                el.height = Math.max(20, dragAction.origH + dy);
+            }
+            renderElements();
+            updatePropsPanel();
+        }
+
+        // --- Drawing Tool ---
+        function startDraw(e) {
+            if(state.tool !== 'draw') return;
+            e.preventDefault();
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / state.zoom;
+            const y = (e.clientY - rect.top) / state.zoom;
+
+            isDrawing = true;
+            currentPath = {
+                id: createId(),
+                page: state.currentPage,
+                type: 'draw',
+                points: [{x,y}],
+                color: state.drawColor,
+                strokeWidth: state.drawWidth,
+                x, y,
+                width: 1,
+                height: 1,
+                originalWidth: 1,
+                originalHeight: 1,
+                opacity: 1
+            };
+        }
+        function draw(e) {
+            if(!isDrawing || !currentPath) return;
+            e.preventDefault();
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / state.zoom;
+            const y = (e.clientY - rect.top) / state.zoom;
+            currentPath.points.push({x,y});
+
+            // Update bounds
+            const xs = currentPath.points.map(p=>p.x);
+            const ys = currentPath.points.map(p=>p.y);
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            currentPath.x = minX;
+            currentPath.y = minY;
+            currentPath.width = maxX-minX;
+            currentPath.height = maxY-minY;
+            currentPath.originalWidth = currentPath.width || 1;
+            currentPath.originalHeight = currentPath.height || 1;
+
+            // Draw preview on drawing layer
+            drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+            drawCtx.save();
+            drawCtx.strokeStyle = currentPath.color;
+            drawCtx.lineWidth = currentPath.strokeWidth;
+            drawCtx.lineCap = 'round';
+            drawCtx.beginPath();
+            const pts = currentPath.points;
+            drawCtx.moveTo(pts[0].x*state.zoom, pts[0].y*state.zoom);
+            for(let i=1;i<pts.length;i++) drawCtx.lineTo(pts[i].x*state.zoom, pts[i].y*state.zoom);
+            drawCtx.stroke();
+            drawCtx.restore();
+        }
+        function endDraw(e) {
+            if(!isDrawing || !currentPath) return;
+            isDrawing = false;
+            // Normalize points to element local coords
+            const baseX = currentPath.x, baseY = currentPath.y;
+            currentPath.points = currentPath.points.map(p => ({ x: p.x - baseX, y: p.y - baseY }));
+            currentPath.width = Math.max(1, currentPath.width);
+            currentPath.height = Math.max(1, currentPath.height);
+            currentPath.originalWidth = currentPath.width;
+            currentPath.originalHeight = currentPath.height;
+            state.elements.push(currentPath);
+            drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+            currentPath = null;
+            addToHistory();
+            renderElements();
+        }
+
+        // --- Export Helper: Rasterize text if rich/custom/border ---
         async function rasterizeTextElement(el) {
             const tempCanvas = document.createElement('canvas');
             const scaleFactor = 2; 
@@ -820,6 +1237,7 @@
             });
         }
 
+        // --- Export ---
         window.exportPDF = async function() {
             const btn = document.getElementById('export-btn'); 
             btn.innerHTML = `<span class="animate-pulse">BUILDING...</span>`;
@@ -881,6 +1299,11 @@
                             }
                         }
                         else if(el.type==='text') { 
+                            // If this is a PDF text replacement, cover the original area first
+                            if (el.subtype === 'pdf-edit' && el.redact) {
+                                const cover = (el.redactColor && el.redactColor !== 'auto') ? el.redactColor : (meta.bgColor || '#ffffff');
+                                page.drawRectangle({x: el.x, y, width: el.width, height: el.height, color: hexToRgb(cover), opacity: 1});
+                            }
                             const hasHtml = /<[a-z][\s\S]*>/i.test(el.content);
                             const isStandardFont = ['Helvetica','Times-Roman','Courier'].some(f => el.fontFamily.includes(f));
                             const hasBorder = el.borderStyle && el.borderStyle !== 'none';
@@ -956,15 +1379,36 @@
             } catch (err) { console.error(err); showToast("Load Error"); }
         };
 
-        window.createBlankPDF = async function() { try { const d = await PDFLib.PDFDocument.create(); d.addPage([595.28, 841.89]); const b = await d.save(); setTimeout(()=>window.initApp(b), 1500); } catch(e){ alert(e); } };
+        window.createBlankPDF = async function() { try { const d = await PDFLib.PDFDocument.create(); d.addPage([595.28, 841.89]); const b = await d.save(); await window.initApp(b); } catch(e){ alert(e); } };
         window.addText = function() { addElement({ type: 'text', content: 'Double click to edit', fontSize: 24, fontFamily: 'Helvetica', color: '#00f3ff', width: 200, height: 40 }); };
         window.addRect = function() { addElement({ type: 'rect', color: '#00f3ff', width: 100, height: 100 }); };
         window.addHighlight = function() { addElement({ type: 'rect', color: '#ffff00', opacity: 0.3, width: 200, height: 30 }); };
         window.addStamp = function(text, color) { addElement({ type: 'text', content: text, fontSize: 36, fontFamily: 'Helvetica', color: color, width: 200, height: 50, isStamp: true }); };
         window.setTool = function(t) {
-            state.tool = t; document.querySelectorAll('.cyber-btn').forEach(b => b.classList.remove('active'));
-            if(t === 'select') document.getElementById('btn-select').classList.add('active'); if(t === 'draw') document.getElementById('btn-draw').classList.add('active');
-            const dl = document.getElementById('drawing-layer'); if (t === 'draw') { dl.classList.add('active'); document.getElementById('draw-props').classList.remove('hidden'); state.selectedId = null; renderElements(); } else { dl.classList.remove('active'); document.getElementById('draw-props').classList.add('hidden'); }
+            state.tool = t;
+            // Tool button highlighting (limit to tool buttons)
+            ['btn-select','btn-pdftext','btn-draw'].forEach(id => {
+                const b = document.getElementById(id);
+                if (b) b.classList.remove('active');
+            });
+            if (t === 'select') document.getElementById('btn-select').classList.add('active');
+            if (t === 'pdftext') document.getElementById('btn-pdftext').classList.add('active');
+            if (t === 'draw') document.getElementById('btn-draw').classList.add('active');
+
+            // Drawing layer enable/disable
+            const dl = document.getElementById('drawing-layer');
+            if (t === 'draw') {
+                dl.classList.add('active');
+                document.getElementById('draw-props').classList.remove('hidden');
+                setPdfTextMode(false);
+                state.selectedId = null;
+                state.isEditingText = false;
+                renderElements();
+            } else {
+                dl.classList.remove('active');
+                document.getElementById('draw-props').classList.add('hidden');
+                setPdfTextMode(t === 'pdftext');
+            }
         };
         window.openSignatureModal = function() { document.getElementById('sig-modal').classList.remove('hidden'); const c = document.getElementById('sig-canvas'); const rect = c.parentElement.getBoundingClientRect(); c.width = rect.width; c.height = rect.height; const cx = c.getContext('2d'); cx.clearRect(0,0,c.width,c.height); cx.lineWidth = 3; cx.lineCap='round'; cx.strokeStyle='#000'; let painting = false; const start = (e) => { painting = true; cx.beginPath(); cx.moveTo(e.offsetX||e.touches[0].clientX-rect.left, e.offsetY||e.touches[0].clientY-rect.top); }; const move = (e) => { if(!painting) return; e.preventDefault(); cx.lineTo(e.offsetX||e.touches[0].clientX-rect.left, e.offsetY||e.touches[0].clientY-rect.top); cx.stroke(); }; const end = () => { painting = false; }; c.onmousedown=start; c.onmousemove=move; c.onmouseup=end; c.ontouchstart=start; c.ontouchmove=move; c.ontouchend=end; };
         window.clearSig = function() { const c = document.getElementById('sig-canvas'); c.getContext('2d').clearRect(0,0,c.width,c.height); };
@@ -979,16 +1423,180 @@
         document.getElementById('page-bg-color').addEventListener('change', () => addToHistory());
         overlay.addEventListener('mousedown', startDraw); overlay.addEventListener('mousemove', draw); overlay.addEventListener('mouseup', endDraw); overlay.addEventListener('mouseleave', endDraw);
         overlay.addEventListener('touchstart', startDraw); overlay.addEventListener('touchmove', draw); overlay.addEventListener('touchend', endDraw);
+        pdfTextLayer.addEventListener('mousedown', handlePdfTextPointerDown);
+        pdfTextLayer.addEventListener('touchstart', handlePdfTextPointerDown, {passive:false});
         new ResizeObserver(() => { if(state.currentViewport && !isPanning && !isDrawing) resetView(); }).observe(document.getElementById('workspace'));
-        workspace.addEventListener('wheel', (e)=>{if(e.ctrlKey||e.metaKey||!e.shiftKey){e.preventDefault(); state.zoom=Math.max(0.1,Math.min(5,state.zoom-e.deltaY*0.001)); updateTransform();}}, {passive:false});
-        workspace.addEventListener('mousedown', (e)=>{if(state.tool!=='draw' && ['workspace','pan-container','overlay-layer'].includes(e.target.id)){isPanning=true; panStart={x:e.clientX-state.pan.x, y:e.clientY-state.pan.y}; workspace.style.cursor='grabbing';}});
-        window.addEventListener('mousemove', (e)=>{if(isPanning){e.preventDefault(); state.pan.x=e.clientX-panStart.x; state.pan.y=e.clientY-panStart.y; updateTransform();} else if (dragAction) {e.preventDefault(); handleMove(e.clientX, e.clientY);}});
-        window.addEventListener('touchmove', (e)=>{if(isPanning){} else if (dragAction) {e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY);}}, {passive: false});
-        window.addEventListener('mouseup', ()=>{if(dragAction){dragAction=null; addToHistory();} isPanning=false; workspace.style.cursor='grab';});
-        window.addEventListener('touchend', ()=>{if(dragAction){dragAction=null; addToHistory();} isPanning=false;});
-        window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); } if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); } if (!state.isEditingText && (e.key === 'Delete' || (e.key === 'Backspace' && state.elements.find(el=>el.id===state.selectedId)?.type!=='text'))) deleteSelected(); });
+        // --- PAN & ZOOM (PC + Mobile) ---
+        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+        function getWorkspacePoint(clientX, clientY) {
+            const rect = workspace.getBoundingClientRect();
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        workspace.addEventListener('wheel', (e) => {
+            // Trackpad pinch often sets ctrlKey on Chromium; respect Ctrl/Meta or explicit gestures
+            const shouldZoom = e.ctrlKey || e.metaKey || !e.shiftKey;
+            if (shouldZoom) {
+                e.preventDefault();
+                const delta = e.deltaY;
+                const pt = getWorkspacePoint(e.clientX, e.clientY);
+                const wx = (pt.x - state.pan.x) / state.zoom;
+                const wy = (pt.y - state.pan.y) / state.zoom;
+                const next = clamp(state.zoom - delta * 0.001, 0.1, 5);
+                state.zoom = next;
+                state.pan.x = pt.x - wx * next;
+                state.pan.y = pt.y - wy * next;
+                updateTransform();
+            }
+        }, { passive: false });
+
+        // Mouse pan on empty space
+        workspace.addEventListener('mousedown', (e) => {
+            if (state.tool === 'draw' || state.isEditingText) return;
+            const tid = e.target && e.target.id;
+            if (['workspace', 'pan-container', 'overlay-layer', 'pdf-text-layer'].includes(tid)) {
+                isPanning = true;
+                panStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
+                workspace.style.cursor = 'grabbing';
+            }
+        });
+
+        // Touch: one-finger pan, two-finger pinch-zoom
+        workspace.addEventListener('touchstart', (e) => {
+            if (state.tool === 'draw' || state.isEditingText) return;
+            if (e.touches.length === 1) {
+                const t = e.touches[0];
+                const tid = e.target && e.target.id;
+                if (['workspace', 'pan-container', 'overlay-layer', 'pdf-text-layer'].includes(tid)) {
+                    isPanning = true;
+                    panStart = { x: t.clientX - state.pan.x, y: t.clientY - state.pan.y };
+                }
+            } else if (e.touches.length === 2) {
+                e.preventDefault();
+                isPinching = true;
+                isPanning = false;
+                const t1 = e.touches[0], t2 = e.touches[1];
+                const dx = t2.clientX - t1.clientX;
+                const dy = t2.clientY - t1.clientY;
+                pinchStartDist = Math.hypot(dx, dy) || 1;
+                pinchStartZoom = state.zoom;
+                const midX = (t1.clientX + t2.clientX) / 2;
+                const midY = (t1.clientY + t2.clientY) / 2;
+                const pt = getWorkspacePoint(midX, midY);
+                pinchWorld = { x: (pt.x - state.pan.x) / state.zoom, y: (pt.y - state.pan.y) / state.zoom };
+            }
+        }, { passive: false });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                e.preventDefault();
+                state.pan.x = e.clientX - panStart.x;
+                state.pan.y = e.clientY - panStart.y;
+                updateTransform();
+            } else if (dragAction) {
+                e.preventDefault();
+                handleMove(e.clientX, e.clientY);
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isPinching && e.touches.length === 2) {
+                e.preventDefault();
+                const t1 = e.touches[0], t2 = e.touches[1];
+                const dx = t2.clientX - t1.clientX;
+                const dy = t2.clientY - t1.clientY;
+                const dist = Math.hypot(dx, dy) || 1;
+                const factor = dist / pinchStartDist;
+                const next = clamp(pinchStartZoom * factor, 0.1, 5);
+                const midX = (t1.clientX + t2.clientX) / 2;
+                const midY = (t1.clientY + t2.clientY) / 2;
+                const pt = getWorkspacePoint(midX, midY);
+                state.zoom = next;
+                state.pan.x = pt.x - pinchWorld.x * next;
+                state.pan.y = pt.y - pinchWorld.y * next;
+                updateTransform();
+                return;
+            }
+
+            if (isPanning && e.touches.length === 1) {
+                e.preventDefault();
+                const t = e.touches[0];
+                state.pan.x = t.clientX - panStart.x;
+                state.pan.y = t.clientY - panStart.y;
+                updateTransform();
+                return;
+            }
+
+            if (dragAction && e.touches.length >= 1) {
+                e.preventDefault();
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        window.addEventListener('mouseup', () => {
+            if (dragAction) { dragAction = null; addToHistory(); }
+            isPanning = false;
+            workspace.style.cursor = 'grab';
+        });
+
+        window.addEventListener('touchend', (e) => {
+            if (dragAction) { dragAction = null; addToHistory(); }
+            const touches = (e && e.touches) ? e.touches : null;
+            if (!touches || touches.length === 0) isPanning = false;
+            if (!touches || touches.length < 2) isPinching = false;
+        }, { passive: true });
+        window.addEventListener('keydown', (e) => {
+            const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+            const isTyping = state.isEditingText || tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
+
+            // Undo/Redo
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) redo();
+                else undo();
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y')) {
+                e.preventDefault();
+                redo();
+                return;
+            }
+
+            if (isTyping) return;
+
+            // Tool shortcuts
+            const k = e.key.toLowerCase();
+            if (k === 'v') { setTool('select'); return; }
+            if (k === 'e') { setTool('pdftext'); return; }
+            if (k === 'd') { setTool('draw'); return; }
+            if (k === 't') { addElement({type:'text', content:'Double-click or tap to edit', fontSize:24, fontFamily:'Inter', color:'#00f3ff', width:260, height:40, backgroundColor:'transparent'}); return; }
+
+            // Zoom
+            if (k === '+' || k === '=') { state.zoom = Math.min(5, state.zoom * 1.1); updateTransform(); return; }
+            if (k === '-' || k === '_') { state.zoom = Math.max(0.1, state.zoom / 1.1); updateTransform(); return; }
+            if (k === '0') { resetView(); return; }
+
+            // Nudge selected element
+            if (state.selectedId) {
+                const el = state.elements.find(x => x.id === state.selectedId);
+                if (el) {
+                    const step = e.shiftKey ? 10 : 1;
+                    if (k === 'arrowleft') { el.x -= step; renderElements(); return; }
+                    if (k === 'arrowright') { el.x += step; renderElements(); return; }
+                    if (k === 'arrowup') { el.y -= step; renderElements(); return; }
+                    if (k === 'arrowdown') { el.y += step; renderElements(); return; }
+                }
+            }
+
+            // Delete
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                const sel = state.elements.find(el => el.id === state.selectedId);
+                if (!sel || sel.type !== 'text') deleteSelected();
+            }
+        });
+
         document.getElementById('img-upload').addEventListener('change', (e) => { if(e.target.files[0]) { const r = new FileReader(); r.onload = (evt) => { const i = new Image(); i.onload = () => { const rat = i.width/i.height; addElement({type:'image', content:evt.target.result, width:200, height:200/rat, aspectRatio:rat}); }; i.src = evt.target.result; }; r.readAsDataURL(e.target.files[0]); } });
-        document.getElementById('file-input').addEventListener('change', async (e) => { if(e.target.files[0]) { try { const b = await e.target.files[0].arrayBuffer(); setTimeout(()=>window.initApp(b), 1500); } catch(err){ alert("Load failed"); } } });
+        document.getElementById('file-input').addEventListener('change', async (e) => { if(e.target.files[0]) { try { const b = await e.target.files[0].arrayBuffer(); await window.initApp(b); } catch(err){ alert("Load failed"); } } });
 
         (function() {
             let warpSpeed = 0, baseSpeed = 0.2, appMode = 'menu';
@@ -1003,8 +1611,19 @@
                 requestAnimationFrame(animateStars);
             }
             window.addEventListener('resize', resizeStars); resizeStars(); animateStars();
-            window.launchApp = function(mode) { appMode = 'warp'; const up = setInterval(() => { warpSpeed += 2; if(warpSpeed > 60) { clearInterval(up); if(mode==='upload') document.getElementById('file-input').click(); if(mode==='create') createBlankPDF(); } }, 30); const p = document.querySelector('#start-screen .glass-panel'); if(p) { p.style.transform = "scale(0.8)"; p.style.opacity = "0"; } };
-            window.enterEditor = function() { const dn = setInterval(() => { warpSpeed *= 0.85; if(warpSpeed < 0.5) { warpSpeed=0; clearInterval(dn); appMode='editor'; initStars(); } }, 50); };
+            window.launchApp = function(mode) {
+                // Removed start/warp animation: launch immediately
+                appMode = 'menu';
+                warpSpeed = 0;
+                if(mode==='upload') document.getElementById('file-input').click();
+                if(mode==='create') createBlankPDF();
+            };
+            window.enterEditor = function() {
+                // Switch starfield to editor mode without an animation ramp
+                appMode = 'editor';
+                warpSpeed = 0;
+                initStars();
+            };
         })();
 
         function resetView() {
@@ -1020,6 +1639,9 @@
         function updateTransform() { document.getElementById('pan-container').style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`; document.getElementById('zoom-disp').innerText = Math.round(state.zoom*100)+'%'; }
         
         window.loadApp = async function(b) { await window.initApp(b); };
+
+        // --- Helpers ---
+        function createId() { return 'id_' + Math.random().toString(36).slice(2, 10); }
     </script>
 </body>
 </html>
