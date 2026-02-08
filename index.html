@@ -3,559 +3,786 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Qwen 0.5B - WebGPU LLM Test</title>
-    <meta name="description" content="Run a tiny Qwen 0.5B instruct model directly in your browser using WebGPU. No server required.">
+    <title>OmniChat AI - Production Agent System</title>
+    <meta name="description" content="Advanced Local AI with Multi-Agent Orchestration and Model Switching.">
     
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
+        body { font-family: 'Inter', sans-serif; }
+        
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         /* Animations */
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+        
         .message-animation { animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .agent-active { animation: pulse-ring 2s infinite; border-color: #3b82f6; }
+        
+        /* Markdown Styles */
+        .prose pre { background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 0.5rem 0; }
+        .prose code { color: #f97316; font-family: monospace; background-color: rgba(249, 115, 22, 0.1); padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+        .prose pre code { color: inherit; background-color: transparent; padding: 0; }
+        .prose p { margin-bottom: 0.5rem; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.5rem; }
 
-        /* Typing Indicator */
+        /* Loader */
         .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
         @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-
-        /* Markdown Styles */
-        .prose pre { background-color: #f1f5f9; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-        .prose code { color: #ea580c; font-family: monospace; background-color: #fff7ed; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
-        .prose pre code { color: #334155; background-color: transparent; padding: 0; }
-        .prose p { margin-bottom: 0.5rem; }
-        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.5rem; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 h-[100dvh] flex flex-col font-sans overflow-hidden">
+<body class="bg-slate-50 text-slate-800 h-[100dvh] flex overflow-hidden selection:bg-orange-100 selection:text-orange-900">
 
-    <!-- Header -->
-    <header class="flex-none bg-white border-b border-slate-200 px-4 py-3 shadow-sm flex items-center justify-between z-20">
-        <div class="flex items-center gap-3">
-            <div class="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center text-white shadow-md">
-                <i class="fa-solid fa-microchip"></i>
+    <!-- Sidebar / Control Panel -->
+    <aside class="w-80 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 flex-none z-30 transition-transform duration-300 absolute md:relative -translate-x-full md:translate-x-0 h-full" id="sidebar">
+        <!-- Logo -->
+        <div class="p-4 border-b border-slate-800 flex items-center gap-3">
+            <div class="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-orange-900/20">
+                <i class="fa-solid fa-layer-group"></i>
             </div>
-            <div>
-                <h1 class="font-bold text-base text-slate-900 leading-tight">Qwen 0.5B</h1>
-                <div class="flex items-center gap-1.5">
-                    <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-300"></span>
-                    <p id="status-text" class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Idle</p>
-                </div>
-            </div>
+            <h1 class="font-bold text-lg text-white tracking-tight">OmniChat <span class="text-orange-500 text-xs uppercase bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">Pro</span></h1>
+            <button id="close-sidebar" class="md:hidden ml-auto text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        
-        <a href="https://github.com/mlc-ai/web-llm" target="_blank" class="text-slate-400 hover:text-slate-600 transition-colors">
-            <i class="fa-brands fa-github text-xl"></i>
-        </a>
-    </header>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col overflow-hidden relative">
-        
-        <!-- Welcome / Loading Screen -->
-        <div id="welcome-screen" class="absolute inset-0 z-10 bg-slate-50/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 transition-all duration-500">
-            <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-slate-100 ring-1 ring-slate-900/5">
-                <div class="w-16 h-16 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl shadow-inner">
-                    <i class="fa-solid fa-bolt"></i>
+        <!-- System Controls -->
+        <div class="p-4 space-y-6 overflow-y-auto flex-1">
+            
+            <!-- Mode Selector -->
+            <div>
+                <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Operation Mode</label>
+                <div class="grid grid-cols-2 gap-2 bg-slate-800 p-1 rounded-xl">
+                    <button id="mode-chat" class="flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium bg-slate-700 text-white shadow-sm transition-all">
+                        <i class="fa-solid fa-comments"></i> Chat / Agent
+                    </button>
+                    <button id="mode-image" class="flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all">
+                        <i class="fa-solid fa-image"></i> Image Gen
+                    </button>
                 </div>
-                
-                <h2 class="text-2xl font-bold text-center text-slate-800 mb-2">Local AI Inference</h2>
-                <p class="text-slate-500 text-center mb-8 text-sm">
-                    Running Qwen 0.5B (~600MB) directly in your browser via WebGPU. No data leaves your device.
+            </div>
+
+            <!-- Model Selector -->
+            <div id="model-selector-container">
+                <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">LLM Model</label>
+                <div class="relative">
+                    <select id="model-select" class="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-lg px-3 py-2.5 focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none appearance-none cursor-pointer">
+                        <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama 3.2 1B (Fastest)</option>
+                        <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC" selected>Qwen 2.5 1.5B (Balanced)</option>
+                        <option value="Hermes-2-Pro-Llama-3-8B-q4f16_1-MLC">Hermes 2 Pro 8B (Smartest)</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-500 text-xs pointer-events-none"></i>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-1.5">
+                    <i class="fa-solid fa-download mr-1"></i> Resumable download. Cached automatically.
                 </p>
+            </div>
 
-                <!-- Requirements Check -->
-                <div id="gpu-error" class="hidden mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex gap-3 items-start">
-                    <i class="fa-solid fa-circle-exclamation text-red-500 mt-0.5 shrink-0"></i>
-                    <div>
-                        <p class="text-sm font-bold text-red-700">WebGPU Unavailable</p>
-                        <p class="text-xs text-red-600 mt-1">Please use Chrome 113+, Edge 113+, or a compatible browser. Ensure you are on HTTPS or localhost.</p>
+            <!-- Agent Logic Visualizer -->
+            <div id="agent-panel" class="hidden">
+                <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block flex justify-between">
+                    Agent Swarm
+                    <span id="loop-counter" class="text-orange-500">Loop 0/5</span>
+                </label>
+                <div class="space-y-3">
+                    <!-- Worker -->
+                    <div id="agent-worker" class="p-3 rounded-lg border border-slate-700 bg-slate-800/50 opacity-50 transition-all">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-hammer text-blue-400 text-xs"></i>
+                            <span class="text-xs font-bold text-slate-300">Worker</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 truncate" id="worker-status">Waiting...</p>
+                    </div>
+
+                    <!-- Supervisor -->
+                    <div id="agent-supervisor" class="p-3 rounded-lg border border-slate-700 bg-slate-800/50 opacity-50 transition-all">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-user-tie text-purple-400 text-xs"></i>
+                            <span class="text-xs font-bold text-slate-300">Supervisor</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 truncate" id="supervisor-status">Idle</p>
+                    </div>
+
+                    <!-- Researcher -->
+                    <div id="agent-researcher" class="p-3 rounded-lg border border-slate-700 bg-slate-800/50 opacity-50 transition-all">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-magnifying-glass text-emerald-400 text-xs"></i>
+                            <span class="text-xs font-bold text-slate-300">Researcher</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 truncate" id="researcher-status">Standby</p>
                     </div>
                 </div>
-
-                <!-- Progress Bar -->
-                <div id="progress-container" class="hidden mb-6 space-y-3">
-                    <div class="flex justify-between text-xs font-semibold text-orange-600">
-                        <span id="progress-label">Initializing...</span>
-                        <span id="progress-percent">0%</span>
+                <div class="mt-4 pt-4 border-t border-slate-800">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="agent-mode-toggle" class="rounded bg-slate-700 border-slate-600 text-orange-600 focus:ring-0 w-4 h-4 cursor-pointer">
+                        <label for="agent-mode-toggle" class="text-xs text-slate-300 cursor-pointer select-none">Enable Agent Swarm</label>
                     </div>
-                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div id="progress-bar" class="bg-orange-500 h-2 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(249,115,22,0.5)]" style="width: 0%"></div>
-                    </div>
-                    <p id="progress-detail" class="text-[10px] text-slate-400 font-mono truncate">Preparing engine...</p>
                 </div>
-
-                <!-- Action Button -->
-                <button id="load-btn" class="w-full group relative overflow-hidden bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg active:scale-95">
-                    <span class="relative z-10 flex items-center justify-center gap-2">
-                        Load Model <i class="fa-solid fa-download group-hover:translate-y-0.5 transition-transform"></i>
-                    </span>
-                </button>
             </div>
             
-            <p class="mt-8 text-xs text-slate-400 text-center max-w-xs">
-                Note: First load requires downloading ~600MB. Subsequent loads are instant (cached).
-            </p>
+            <!-- Image Settings (Hidden by default) -->
+            <div id="image-panel" class="hidden">
+                 <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Image Engine</label>
+                 <div class="p-3 bg-slate-800 rounded-lg border border-slate-700">
+                    <div class="flex items-center gap-2 text-yellow-500 mb-2">
+                        <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                        <span class="text-xs font-bold">Experimental</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400">
+                        Swaps VRAM context from LLM to Diffusion. Chat history is preserved, but the LLM must reload to chat again.
+                    </p>
+                 </div>
+            </div>
+
         </div>
 
-        <!-- Chat Container -->
-        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-4">
-            <!-- Initial System Message -->
-            <div class="flex gap-4 max-w-3xl mx-auto opacity-60 hover:opacity-100 transition-opacity">
-                <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-orange-600 text-xs shadow-sm">
-                    <i class="fa-solid fa-robot"></i>
-                </div>
-                <div class="bg-white border border-slate-200 p-4 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-600">
-                    Model loaded. I am ready to chat!
+        <!-- Footer -->
+        <div class="p-4 bg-slate-950 border-t border-slate-900 text-[10px] text-slate-500 flex justify-between">
+            <span>WebGPU Local Inference</span>
+            <span id="vram-stat">VRAM: --</span>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative w-full">
+        
+        <!-- Header -->
+        <header class="h-14 bg-white border-b border-slate-200 flex items-center px-4 justify-between shrink-0">
+            <div class="flex items-center gap-3">
+                <button id="toggle-sidebar" class="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded-lg">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="flex items-center gap-2">
+                    <span id="status-indicator" class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                    <div>
+                        <h2 id="current-model-name" class="text-sm font-bold text-slate-800 leading-none">System Idle</h2>
+                        <p id="system-status" class="text-[10px] text-slate-500 font-medium mt-0.5">Ready to load</p>
+                    </div>
                 </div>
             </div>
+            <div class="flex items-center gap-3">
+                 <button id="clear-chat" class="text-slate-400 hover:text-red-500 transition-colors text-xs font-medium px-2 py-1 rounded hover:bg-red-50">
+                    <i class="fa-solid fa-trash-can mr-1"></i> Clear
+                </button>
+            </div>
+        </header>
+
+        <!-- Chat Area -->
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth bg-slate-50">
+            
+            <!-- Welcome State -->
+            <div id="welcome-screen" class="h-full flex flex-col items-center justify-center transition-all duration-500">
+                <div class="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center text-orange-600 text-3xl mb-6 ring-1 ring-slate-200">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 mb-2 text-center">Local WebGPU Intelligence</h1>
+                <p class="text-slate-500 text-sm max-w-md text-center mb-8">
+                    Select a model and mode to begin. All processing happens locally on your device.
+                </p>
+
+                <div class="w-full max-w-xs space-y-4">
+                    <!-- Progress Bar -->
+                    <div id="progress-container" class="hidden">
+                        <div class="flex justify-between text-xs font-medium text-slate-700 mb-1">
+                            <span id="progress-action">Initializing...</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div id="progress-bar" class="bg-orange-600 h-1.5 rounded-full transition-all duration-300 w-0"></div>
+                        </div>
+                        <p id="progress-detail" class="text-[10px] text-slate-400 mt-1 truncate font-mono"></p>
+                    </div>
+
+                    <button id="load-btn" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-4 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
+                        <span>Initialize Engine</span>
+                        <i class="fa-solid fa-power-off"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Messages will be injected here -->
         </div>
 
-        <!-- Input Area (Fixed at bottom, not absolute) -->
-        <div class="flex-none bg-white border-t border-slate-200 p-4 z-20">
-            <div class="max-w-3xl mx-auto relative">
-                <form id="chat-form" class="relative flex items-end gap-2">
-                    <div class="relative flex-1">
-                        <textarea 
-                            id="user-input" 
-                            rows="1"
-                            placeholder="Type a message..." 
-                            class="w-full bg-slate-100 text-slate-800 border-0 rounded-2xl pl-4 pr-4 py-3 focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all resize-none shadow-inner max-h-32 text-sm"
-                            disabled
-                        ></textarea>
-                    </div>
+        <!-- Input Area -->
+        <div class="bg-white border-t border-slate-200 p-4 shrink-0">
+            <div class="max-w-4xl mx-auto relative">
+                <div id="agent-badge" class="hidden absolute -top-10 left-0 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
+                    <i class="fa-solid fa-users-gear"></i> Agent Swarm Active
+                </div>
+
+                <form id="chat-form" class="relative flex items-end gap-2 bg-slate-100 p-2 rounded-2xl border border-transparent focus-within:border-orange-200 focus-within:bg-white focus-within:ring-4 focus-within:ring-orange-500/10 transition-all">
+                    
+                    <textarea 
+                        id="user-input" 
+                        rows="1"
+                        placeholder="Type a message or request..." 
+                        class="w-full bg-transparent text-slate-800 border-0 focus:ring-0 p-2 text-sm resize-none max-h-32 placeholder:text-slate-400"
+                        disabled
+                    ></textarea>
+                    
                     <button 
                         type="submit" 
                         id="send-btn"
-                        class="h-11 w-11 flex items-center justify-center bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shrink-0 mb-[1px]"
+                        class="w-10 h-10 flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm shrink-0"
                         disabled
                     >
-                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
                     </button>
                 </form>
+                <p class="text-[10px] text-center text-slate-400 mt-2">
+                    <i class="fa-solid fa-shield-halved mr-1"></i> Private Local Inference. No data leaves this window.
+                </p>
             </div>
         </div>
 
     </main>
 
     <script type="module">
-        // Using stable version 0.2.46 to minimize "Invalid URL" issues with recent strict parsing
         import * as webllm from "https://esm.run/@mlc-ai/web-llm@0.2.46";
-        // Expose for debugging / non-module scripts
-        window.webllm = webllm;
-        const { CreateMLCEngine } = webllm;
-
-        // CONFIGURATION
-        // We use the EXACT path structure from the binary-mlc-llm-libs repository.
-        // Pick a tiny model for maximum compatibility.
-// We prefer a Qwen 0.5B instruct quantized build if present in the prebuilt list.
-const PREFERRED_MODEL_REGEXES = [
-  /Qwen\d*(?:\.\d+)?-0\.5B-?Instruct.*q4f/i,
-  /Qwen\d*(?:\.\d+)?-0\.5B-?Instruct/i,
-  /Qwen.*0\.5B.*Instruct/i,
-];
-
-function pickDefaultModelId() {
-  const list = webllm?.prebuiltAppConfig?.model_list ?? [];
-  for (const rx of PREFERRED_MODEL_REGEXES) {
-    const hit = list.find(m => rx.test(String(m.model_id)));
-    if (hit?.model_id) return hit.model_id;
-  }
-  // If no Qwen 0.5B is available in this WebLLM version, fall back to any tiny model.
-  const fallback = list.find(m => /0\.5B|1B|TinyLlama/i.test(String(m.model_id)));
-  return fallback?.model_id || (list[0]?.model_id ?? ""); // last resort
-}
-
-// NOTE: The selected model id is shown in the UI once the page loads.
-let MODEL_ID = "";
-
-/**
- * OPTIONAL OVERRIDES
- * - If you want to host model weights/config yourself (R2 / your CDN), set MODEL_URL_OVERRIDE
- *   to the directory that contains mlc-chat-config.json, ndarray-cache.json, tokenizer.json, etc.
- * - If you want to host the model library yourself, set MODEL_LIB_URL_OVERRIDE to the .wasm URL.
- *
- * If left empty, we try to use webllm.prebuiltAppConfig for MODEL_ID.
- */
-const MODEL_URL_OVERRIDE = "";    // e.g. "https://huggingface.co/mlc-ai/Qwen2-0.5B-Instruct-q4f16_1-MLC"
-const MODEL_LIB_URL_OVERRIDE = ""; // e.g. webllm.modelLibURLPrefix + webllm.modelVersion + "/<...-webgpu.wasm>"
-
-function buildAppConfig() {
-  const list = webllm?.prebuiltAppConfig?.model_list ?? [];
-  const prebuilt = list.find(m => m.model_id === MODEL_ID);
-
-  const isAbsURL = (s) => {
-    try { new URL(s); return true; } catch { return false; }
-  };
-
-  const normalizeModelLib = (lib) => {
-    const v = String(lib || "");
-    if (!v) return v;
-    if (isAbsURL(v)) return v;
-    // Accept both "/file.wasm" and "file.wasm"
-    const file = v.replace(/^\/+/, "");
-    return `${webllm.modelLibURLPrefix}${webllm.modelVersion}/${file}`;
-  };
-
-  // Use prebuilt record if available (recommended).
-  if (prebuilt) {
-    const patched = { ...prebuilt };
-    // Some CDNs/bundlers can surface prebuilt model_lib as a bare filename; normalize it.
-    patched.model_lib = normalizeModelLib(MODEL_LIB_URL_OVERRIDE || patched.model_lib);
-    if (MODEL_URL_OVERRIDE) patched.model = MODEL_URL_OVERRIDE;
-    return { model_list: [patched] };
-  }
-
-  // Fall back to explicit overrides if MODEL_ID isn't prebuilt.
-  if (!MODEL_URL_OVERRIDE || !MODEL_LIB_URL_OVERRIDE) {
-    const available = list.map(m => m.model_id).slice(0, 50);
-    throw new Error(
-      `MODEL_ID "${MODEL_ID}" is not in webllm.prebuiltAppConfig.model_list and overrides are empty.\n` +
-      `Either:\n` +
-      `  1) Pick a model_id from prebuiltAppConfig (first 50): ${available.join(", ")}\n` +
-      `  2) Or set MODEL_URL_OVERRIDE and MODEL_LIB_URL_OVERRIDE (absolute https URLs).`
-    );
-  }
-
-  return {
-    model_list: [{
-      model_id: MODEL_ID,
-      model: MODEL_URL_OVERRIDE,
-      model_lib: MODEL_LIB_URL_OVERRIDE,
-    }],
-  };
-}
-
-const el = {
-            loadBtn: document.getElementById('load-btn'),
+        
+        // --- CONSTANTS & CONFIG ---
+        const DOM = {
+            sidebar: document.getElementById('sidebar'),
+            toggleSidebar: document.getElementById('toggle-sidebar'),
+            closeSidebar: document.getElementById('close-sidebar'),
             welcome: document.getElementById('welcome-screen'),
-            chatBox: document.getElementById('chat-container'),
-            form: document.getElementById('chat-form'),
+            chatContainer: document.getElementById('chat-container'),
             input: document.getElementById('user-input'),
-            send: document.getElementById('send-btn'),
-            progressBox: document.getElementById('progress-container'),
+            sendBtn: document.getElementById('send-btn'),
+            form: document.getElementById('chat-form'),
+            loadBtn: document.getElementById('load-btn'),
             progressBar: document.getElementById('progress-bar'),
             progressText: document.getElementById('progress-percent'),
             progressDetail: document.getElementById('progress-detail'),
-            statusText: document.getElementById('status-text'),
+            progressContainer: document.getElementById('progress-container'),
             statusDot: document.getElementById('status-indicator'),
-            gpuError: document.getElementById('gpu-error')
-};
-
-        // Disable load until WebGPU preflight completes
-        el.loadBtn.disabled = true;
-        el.loadBtn.classList.add('opacity-60','cursor-not-allowed');
-        el.statusText.innerText = 'Checking WebGPU…';
-
-
-        function showFatal(title, body) {
-            el.gpuError.classList.remove('hidden');
-            el.loadBtn.classList.add('hidden');
-            const titleEl = el.gpuError.querySelector('p.text-sm');
-            const bodyEl = el.gpuError.querySelector('p.text-xs');
-            if (titleEl) titleEl.textContent = title;
-            if (bodyEl) bodyEl.textContent = body;
-        }
-
-        let engine;
-        let messages = [
-            { role: "system", content: "You are a helpful, concise AI assistant." }
-        ];
-
-        // 1. Pre-flight Checks + Diagnostics
-        (async function initChecks() {
-            const lines = [];
-            const add = (k, v) => lines.push(`${k}: ${v}`);
-            add("URL", location.href);
-            add("Protocol", location.protocol);
-            add("SecureContext", String(window.isSecureContext));
-            add("UserAgent", navigator.userAgent);
-            add("navigator.gpu", String(!!navigator.gpu));
-            add("crossOriginIsolated", String(window.crossOriginIsolated));
-            add("SharedArrayBuffer", String(typeof SharedArrayBuffer !== "undefined"));
-            add("Top==Self", String(window.top === window));
-            // Permissions Policy visibility (helps debug iframe restrictions)
-            add("document.permissionsPolicy", String(!!document.permissionsPolicy));
-            try {
-                const feats = document.permissionsPolicy?.features?.() ?? [];
-                add("PP features (first 30)", feats.slice(0,30).join(",") + (feats.length>30?`…(+${feats.length-30})`:""));
-            } catch (e) {
-                add("PP features", "unavailable");
+            statusText: document.getElementById('system-status'),
+            modelName: document.getElementById('current-model-name'),
+            modelSelect: document.getElementById('model-select'),
+            modeChatBtn: document.getElementById('mode-chat'),
+            modeImageBtn: document.getElementById('mode-image'),
+            agentPanel: document.getElementById('agent-panel'),
+            imagePanel: document.getElementById('image-panel'),
+            agentToggle: document.getElementById('agent-mode-toggle'),
+            agentBadge: document.getElementById('agent-badge'),
+            agents: {
+                worker: document.getElementById('agent-worker'),
+                supervisor: document.getElementById('agent-supervisor'),
+                researcher: document.getElementById('agent-researcher')
             }
-            try { add("PP allows webgpu", String(document.permissionsPolicy?.allowsFeature?.("webgpu"))); } catch {}
-            try { add("PP allows gpu", String(document.permissionsPolicy?.allowsFeature?.("gpu"))); } catch {}
+        };
 
-            const diagToggle = document.getElementById('diag-toggle');
-            const diagBox = document.getElementById('diag-box');
-            const writeDiag = () => { if (diagBox) diagBox.textContent = lines.join('\n'); };
+        // --- STATE MANAGEMENT ---
+        const State = {
+            engine: null, // The WebLLM Engine
+            isImageMode: false,
+            isAgentMode: false,
+            isGenerating: false,
+            currentModelId: null,
+            chatHistory: [],
+            agentLoopCount: 0,
+            maxAgentLoops: 4
+        };
 
-            if (diagToggle && diagBox) {
-                diagToggle.addEventListener('click', () => {
-                    const nowHidden = diagBox.classList.toggle('hidden');
-                    diagToggle.textContent = nowHidden ? 'show' : 'hide';
-                });
+        // --- UI CONTROLLER ---
+        class UI {
+            static toggleSidebar() {
+                DOM.sidebar.classList.toggle('-translate-x-full');
             }
 
-            if (location.protocol === 'file:' || location.origin === 'null') {
-                add("ERROR", "Running under file:// or null origin");
-                writeDiag();
-                showFatal('Invalid URL context', 'Open this page over https:// or http://localhost (not as a local file).');
-                return;
+            static setStatus(status, text, dotColor = 'bg-slate-300') {
+                DOM.statusText.textContent = text;
+                DOM.statusDot.className = `w-2.5 h-2.5 rounded-full ${dotColor} ${status === 'busy' ? 'animate-pulse' : ''}`;
             }
 
-            if (!navigator.gpu) {
-                add("ERROR", "navigator.gpu missing");
-                writeDiag();
-                showFatal('WebGPU Unavailable', 'This browser/context does not expose WebGPU. Try Chrome/Edge (Android) or a desktop Chromium with WebGPU enabled, and use HTTPS.');
-                return;
+            static updateProgress(percent, text) {
+                DOM.progressContainer.classList.remove('hidden');
+                DOM.loadBtn.classList.add('hidden');
+                DOM.progressBar.style.width = `${percent}%`;
+                DOM.progressText.textContent = `${Math.round(percent)}%`;
+                DOM.progressDetail.textContent = text;
             }
 
-            // Attempt to acquire adapter/device so we can show a precise message.
-            let adapter = null;
-            try {
-                adapter = await navigator.gpu.requestAdapter(); // default
-                if (!adapter) adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-                if (!adapter) adapter = await navigator.gpu.requestAdapter({ powerPreference: 'low-power' });
-
-                // Some implementations expose a compatibility mode; try it if available.
-                // (If unsupported, Chrome will just ignore the field.)
-                if (!adapter) adapter = await navigator.gpu.requestAdapter({ compatibilityMode: true });
-                if (!adapter) adapter = await navigator.gpu.requestAdapter({ powerPreference: 'low-power', compatibilityMode: true });
-} catch (e) {
-                add("requestAdapter exception", (e && (e.message || String(e))) || "unknown");
+            static switchToChat() {
+                DOM.welcome.classList.add('hidden');
+                DOM.input.disabled = false;
+                DOM.sendBtn.disabled = false;
+                DOM.input.focus();
             }
 
-            if (adapter) {
-                try { add("adapter.isFallbackAdapter", String(adapter.isFallbackAdapter)); } catch {}
-                try { add("adapter.features.size", String(adapter.features?.size ?? "?")); } catch {}
-                try { add("adapter.limits.maxBindGroups", String(adapter.limits?.maxBindGroups ?? "?")); } catch {}
-            }
-
-            if (!adapter) {
-                add("ERROR", "requestAdapter returned null");
-                writeDiag();
-                showFatal('No Compatible GPU', 'WebGPU is present but the browser could not create an adapter. This commonly happens in in-app browsers/WebViews, with GPU acceleration disabled, or on unsupported/blacklisted drivers. Open this in full Chrome/Edge and verify at webgpureport.org.');
-                return;
-            }
-
-            try {
-                const device = await adapter.requestDevice();
-                add("requestDevice", "ok");
-                try { device.destroy(); } catch {}
-            } catch (e) {
-                add("ERROR", "requestDevice failed");
-                add("requestDevice exception", (e && (e.message || String(e))) || "unknown");
-                writeDiag();
-                showFatal('WebGPU Device Failed', 'A GPU adapter was found but the browser failed to create a device. Try a different browser, disable battery saver, and ensure hardware acceleration is enabled.');
-                return;
-            }
-
-            // Pick the model id only after the WebLLM bundle is loaded
-            MODEL_ID = pickDefaultModelId();
-            add("Selected MODEL_ID", MODEL_ID || "(none)");
-            writeDiag();
-
-            if (!MODEL_ID) {
-                showFatal('No Models Available', 'webllm.prebuiltAppConfig.model_list is empty. The WebLLM bundle may have failed to load.');
-                return;
-            }
-
-            // Enable load button
-            el.loadBtn.disabled = false;
-            el.loadBtn.classList.remove('opacity-60','cursor-not-allowed');
-            el.statusText.innerText = `Ready — ${MODEL_ID}`;
-        })();
-
-
-// 2. Load Engine
-        el.loadBtn.addEventListener('click', async () => {
-            if (!MODEL_ID) {
-                showFatal('Model Not Selected', 'Model ID was not set. Refresh and wait for diagnostics to finish.');
-                return;
-            }
-
-            el.loadBtn.classList.add('hidden');
-            el.progressBox.classList.remove('hidden');
-            el.gpuError.classList.add('hidden');
-
-            try {
-                // Quick sanity check: WebLLM primarily targets WebGPU.
-                if (!('gpu' in navigator) || !navigator.gpu) {
-                    throw new Error(
-                        "WebGPU is not available in this browser/context. " +
-                        "Use a WebGPU-capable Chrome/Edge build and verify at webgpureport.org. " +
-                        "If this page is inside an iframe, ensure WebGPU isn't blocked by permissions policy."
-                    );
+            static addMessage(role, text, id = null) {
+                const isUser = role === 'user';
+                const div = document.createElement('div');
+                div.className = `flex gap-4 max-w-3xl mx-auto w-full message-animation ${isUser ? 'flex-row-reverse' : ''}`;
+                
+                let avatarIcon = 'fa-robot';
+                let avatarColor = 'bg-orange-600';
+                
+                if (isUser) {
+                    avatarIcon = 'fa-user';
+                    avatarColor = 'bg-slate-800';
+                } else if (role === 'system') {
+                    avatarIcon = 'fa-gear';
+                    avatarColor = 'bg-slate-400';
                 }
 
-                const appConfig = buildAppConfig();
+                // Agent avatars
+                if (text.startsWith('[WORKER]')) { avatarIcon = 'fa-hammer'; avatarColor = 'bg-blue-500'; text = text.replace('[WORKER]', '').trim(); }
+                if (text.startsWith('[SUPERVISOR]')) { avatarIcon = 'fa-user-tie'; avatarColor = 'bg-purple-500'; text = text.replace('[SUPERVISOR]', '').trim(); }
+                if (text.startsWith('[RESEARCHER]')) { avatarIcon = 'fa-magnifying-glass'; avatarColor = 'bg-emerald-500'; text = text.replace('[RESEARCHER]', '').trim(); }
+                if (text.startsWith('[IMAGE]')) { avatarIcon = 'fa-image'; avatarColor = 'bg-pink-500'; text = text.replace('[IMAGE]', '').trim(); }
 
-                // Initialize engine with explicit config
-                engine = await webllm.CreateMLCEngine(
-                    MODEL_ID,
-                    {
-                        appConfig: appConfig,
-                        initProgressCallback: (report) => {
-                            const p = Math.round(report.progress * 100);
-                            el.progressBar.style.width = `${p}%`;
-                            el.progressText.innerText = `${p}%`;
-                            el.progressDetail.innerText = report.text;
-                        }
+                const avatar = `<div class="w-8 h-8 rounded-full ${avatarColor} text-white flex items-center justify-center flex-shrink-0 text-xs shadow-sm"><i class="fa-solid ${avatarIcon}"></i></div>`;
+
+                let contentHTML;
+                if (id) {
+                    contentHTML = `
+                        <div id="${id}-content" class="prose prose-sm prose-invert max-w-none text-slate-800"></div>
+                        <div id="${id}-loader" class="flex gap-1 py-1">
+                            <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                            <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                            <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                        </div>
+                    `;
+                } else {
+                    // Check if image
+                    if (text.startsWith('blob:')) {
+                        contentHTML = `<img src="${text}" class="rounded-lg shadow-md max-w-full border border-slate-200" alt="Generated Image">`;
+                    } else {
+                        contentHTML = marked.parse(text);
                     }
-                );
+                }
 
-                // Transition to Chat
-                el.welcome.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => el.welcome.classList.add('hidden'), 500);
-                
-                el.input.disabled = false;
-                el.send.disabled = false;
-                el.input.focus();
-                
-                el.statusText.innerText = "Active";
-                el.statusText.classList.replace('text-slate-500', 'text-green-600');
-                el.statusDot.classList.replace('bg-slate-300', 'bg-green-500');
-                el.statusDot.classList.add('animate-pulse');
+                const bubbleClass = isUser 
+                    ? 'bg-slate-800 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm text-sm' 
+                    : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm text-sm w-full';
 
-            } catch (error) {
-                console.error(error);
-                el.progressBox.classList.add('hidden');
-                el.loadBtn.classList.remove('hidden');
-                alert(`Error loading model: ${error.message}\n\nMake sure you are not using a VPN or Firewall blocking GitHub.`);
+                div.innerHTML = `${avatar}<div class="${bubbleClass}">${contentHTML}</div>`;
+                DOM.chatContainer.appendChild(div);
+                
+                // Post-process links to open new tab
+                div.querySelectorAll('a').forEach(a => {
+                    a.target = '_blank';
+                    a.classList.add('text-blue-500', 'underline');
+                });
+
+                DOM.chatContainer.scrollTo({ top: DOM.chatContainer.scrollHeight, behavior: 'smooth' });
             }
+
+            static updateAgentStatus(agent, status) {
+                // Reset all opacities
+                Object.values(DOM.agents).forEach(el => {
+                    el.classList.remove('agent-active', 'opacity-100');
+                    el.classList.add('opacity-50');
+                });
+                
+                // Activate current
+                if (DOM.agents[agent]) {
+                    DOM.agents[agent].classList.remove('opacity-50');
+                    DOM.agents[agent].classList.add('agent-active', 'opacity-100');
+                    document.getElementById(`${agent}-status`).textContent = status;
+                }
+            }
+
+            static resetAgentUI() {
+                Object.values(DOM.agents).forEach(el => {
+                    el.classList.remove('agent-active', 'opacity-100');
+                    el.classList.add('opacity-50');
+                });
+                document.getElementById('worker-status').textContent = 'Waiting...';
+                document.getElementById('supervisor-status').textContent = 'Idle';
+                document.getElementById('researcher-status').textContent = 'Standby';
+                document.getElementById('loop-counter').textContent = 'Loop 0/5';
+            }
+        }
+
+        // --- LOGIC: AGENT SYSTEM ---
+        class AgentSystem {
+            static async runLoop(userPrompt) {
+                State.isGenerating = true;
+                State.agentLoopCount = 0;
+                UI.resetAgentUI();
+                
+                let currentContext = userPrompt;
+                let currentOutput = "";
+                let conversationHistory = []; // Local history for this task
+
+                try {
+                    // 1. Worker Initial Attempt
+                    UI.updateAgentStatus('worker', 'Generating initial response...');
+                    currentOutput = await AgentSystem.callWorker(userPrompt, []);
+                    UI.addMessage('assistant', `[WORKER] ${currentOutput}`);
+
+                    // Loop
+                    while (State.agentLoopCount < State.maxAgentLoops) {
+                        State.agentLoopCount++;
+                        document.getElementById('loop-counter').textContent = `Loop ${State.agentLoopCount}/${State.maxAgentLoops}`;
+
+                        // 2. Supervisor Review
+                        UI.updateAgentStatus('supervisor', 'Reviewing output...');
+                        const feedback = await AgentSystem.callSupervisor(userPrompt, currentOutput);
+                        
+                        if (feedback.status === 'APPROVED') {
+                            UI.addMessage('assistant', `[SUPERVISOR] ✅ Output Approved.`);
+                            UI.updateAgentStatus('supervisor', 'Approved');
+                            break;
+                        }
+
+                        // Rejection handling
+                        UI.addMessage('assistant', `[SUPERVISOR] ⚠️ Revision Needed: ${feedback.reason}`);
+                        
+                        // 3. Researcher Check (Simulated Trigger based on keywords in feedback or strictness)
+                        if (feedback.reason.toLowerCase().includes('fact') || feedback.reason.toLowerCase().includes('unknown')) {
+                            UI.updateAgentStatus('researcher', 'Retrieving knowledge...');
+                            const knowledge = await AgentSystem.callResearcher(feedback.reason);
+                            UI.addMessage('assistant', `[RESEARCHER] 🔍 Insight: ${knowledge}`);
+                            // Append knowledge to context for worker
+                            currentContext += `\n\nResearch Note: ${knowledge}`;
+                        }
+
+                        // 4. Worker Revision
+                        UI.updateAgentStatus('worker', 'Revising based on feedback...');
+                        currentOutput = await AgentSystem.callWorker(currentContext, [{role: 'user', content: `Supervisor Feedback: ${feedback.reason}. Fix it.`}]);
+                        UI.addMessage('assistant', `[WORKER] ${currentOutput}`);
+                    }
+
+                    if (State.agentLoopCount >= State.maxAgentLoops) {
+                        UI.addMessage('assistant', `[SYSTEM] Maximum loops reached. Final output provided.`);
+                    }
+
+                } catch (err) {
+                    UI.addMessage('system', `Agent Loop Error: ${err.message}`);
+                } finally {
+                    State.isGenerating = false;
+                    UI.resetAgentUI();
+                }
+            }
+
+            static async callWorker(task, history) {
+                const messages = [
+                    { role: "system", content: "You are a skilled WORKER agent. Your goal is to execute the user's request precisely. Do not complain. Just do the work." },
+                    { role: "user", content: task },
+                    ...history
+                ];
+                return await Engine.generate(messages);
+            }
+
+            static async callSupervisor(originalRequest, workerOutput) {
+                const messages = [
+                    { role: "system", content: "You are a strict SUPERVISOR. Output JSON ONLY: { \"status\": \"APPROVED\" | \"REJECTED\", \"reason\": \"...\" }. Check if Worker Output satisfies Original Request." },
+                    { role: "user", content: `Original Request: ${originalRequest}\n\nWorker Output: ${workerOutput}` }
+                ];
+                
+                const raw = await Engine.generate(messages, 0.1); // Low temp for logic
+                
+                // Basic parsing of JSON from LLM output (often wrapped in ```json)
+                try {
+                    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        return parsed;
+                    }
+                    // Fallback if no JSON found
+                    if (raw.includes("APPROVED")) return { status: "APPROVED", reason: "Good job." };
+                    return { status: "REJECTED", reason: raw };
+                } catch (e) {
+                    return { status: "REJECTED", reason: "Invalid JSON format from Supervisor. Asking for retry." };
+                }
+            }
+
+            static async callResearcher(query) {
+                // Since we can't real-time search without API keys, we prompt the model to access its internal knowledge as a "Researcher"
+                const messages = [
+                    { role: "system", content: "You are a RESEARCHER with access to a vast internal database. Provide factual, concise information to solve the query." },
+                    { role: "user", content: query }
+                ];
+                return await Engine.generate(messages);
+            }
+        }
+
+        // --- LOGIC: ENGINE WRAPPER ---
+        class Engine {
+            static async init(modelId) {
+                try {
+                    State.currentModelId = modelId;
+                    const appConfig = {
+                        model_list: [{
+                            model_id: modelId,
+                            model_lib: `${webllm.modelLibURLPrefix}${webllm.modelVersion}/${modelId.replace(/-/g, '_')}-webgpu.wasm`, // Standard naming convention guess
+                        }]
+                    };
+                    
+                    // Allow WebLLM to resolve its own defaults if possible, but we use the ID from the select
+                    // Note: In 0.2.x, we usually rely on the prebuilt config unless overriding.
+                    // We will just pass the ID and let WebLLM fetch from its CDN.
+                    
+                    State.engine = await webllm.CreateMLCEngine(modelId, {
+                        initProgressCallback: (report) => {
+                            UI.updateProgress(report.progress * 100, report.text);
+                        }
+                    });
+                    
+                    UI.setStatus('ready', 'Engine Ready', 'bg-green-500');
+                    DOM.modelName.textContent = modelId.split('-')[0]; // Simple name
+                    UI.switchToChat();
+
+                } catch (e) {
+                    console.error(e);
+                    alert(`Load Error: ${e.message}. \nTry a different model or browser.`);
+                    DOM.loadBtn.classList.remove('hidden');
+                    DOM.progressContainer.classList.add('hidden');
+                }
+            }
+
+            static async generate(messages, temperature = 0.7) {
+                const response = await State.engine.chat.completions.create({
+                    messages,
+                    temperature,
+                    stream: false, // For agents we want the full text to parse
+                });
+                return response.choices[0].message.content;
+            }
+
+            static async streamChat(messages, onUpdate) {
+                const chunks = await State.engine.chat.completions.create({
+                    messages,
+                    stream: true,
+                    temperature: 0.7
+                });
+
+                let fullText = "";
+                for await (const chunk of chunks) {
+                    const delta = chunk.choices[0]?.delta?.content || "";
+                    fullText += delta;
+                    onUpdate(fullText);
+                }
+                return fullText;
+            }
+
+            static async unload() {
+                if (State.engine) {
+                    await State.engine.unload();
+                    State.engine = null;
+                    UI.setStatus('idle', 'Engine Unloaded', 'bg-slate-300');
+                    DOM.welcome.classList.remove('hidden');
+                    DOM.loadBtn.classList.remove('hidden');
+                    DOM.loadBtn.innerHTML = `<span>Reload Engine</span> <i class="fa-solid fa-rotate-right"></i>`;
+                }
+            }
+        }
+
+        // --- LOGIC: IMAGE GENERATION SIMULATOR ---
+        // Real in-browser SD via WebGPU requires >4GB VRAM and complex WASM that conflicts with WebLLM in a single file.
+        // We implement the ARCHITECTURE (Switching/Unloading) and a mock generator to demonstrate the flow.
+        class ImageEngine {
+            static async generate(prompt) {
+                // 1. Generate a placeholder image (using Placehold.co or similar for demo)
+                // In a full implementation, this would call web-sd.
+                const delay = (ms) => new Promise(res => setTimeout(res, ms));
+                
+                await delay(2000); // Simulate processing
+                
+                // Return a generated visual (using a reliable placeholder service with the prompt text)
+                // We use a canvas to generate a cool visual locally to keep it offline-ish
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                // Generative Art Placeholder
+                const grd = ctx.createLinearGradient(0, 0, 512, 512);
+                grd.addColorStop(0, "#f97316");
+                grd.addColorStop(1, "#1e293b");
+                ctx.fillStyle = grd;
+                ctx.fillRect(0,0,512,512);
+                
+                ctx.fillStyle = "rgba(255,255,255,0.1)";
+                for(let i=0; i<50; i++) {
+                    ctx.beginPath();
+                    ctx.arc(Math.random()*512, Math.random()*512, Math.random()*50, 0, 2*Math.PI);
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = "white";
+                ctx.font = "20px monospace";
+                ctx.fillText("AI IMAGE GEN MODE", 20, 40);
+                ctx.font = "14px sans-serif";
+                ctx.fillText(prompt.substring(0, 30) + "...", 20, 70);
+                
+                return canvas.toDataURL();
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        
+        // 1. Sidebar toggles
+        DOM.toggleSidebar.addEventListener('click', UI.toggleSidebar);
+        DOM.closeSidebar.addEventListener('click', UI.toggleSidebar);
+        
+        // 2. Load Button
+        DOM.loadBtn.addEventListener('click', () => {
+            const modelId = DOM.modelSelect.value;
+            Engine.init(modelId);
         });
 
         // 3. Chat Logic
-        el.form.addEventListener('submit', async (e) => {
+        DOM.form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const text = el.input.value.trim();
-            if (!text || !engine) return;
+            const text = DOM.input.value.trim();
+            if (!text || State.isGenerating) return;
 
-            // Add User Message
-            addMessage('user', text);
-            messages.push({ role: "user", content: text });
-            
-            el.input.value = '';
-            el.input.style.height = 'auto'; // Reset height
-            el.send.disabled = true;
+            // Reset Input
+            DOM.input.value = '';
+            DOM.input.style.height = 'auto';
+            UI.addMessage('user', text);
+            State.isGenerating = true;
+            DOM.sendBtn.disabled = true;
 
-            // Create AI Placeholder
+            // Image Mode Route
+            if (State.isImageMode) {
+                const aiId = `img-${Date.now()}`;
+                UI.addMessage('assistant', '', aiId);
+                const loader = document.getElementById(`${aiId}-loader`);
+                const content = document.getElementById(`${aiId}-content`);
+                content.innerHTML = `<span class="text-xs text-pink-500 font-mono">Generating image... (Simulated for Demo)</span>`;
+                
+                const imgData = await ImageEngine.generate(text);
+                loader.remove();
+                content.innerHTML = ""; // clear text
+                UI.addMessage('assistant', `[IMAGE] ${imgData}`);
+                State.isGenerating = false;
+                DOM.sendBtn.disabled = false;
+                return;
+            }
+
+            // Agent Mode Route
+            if (State.isAgentMode) {
+                await AgentSystem.runLoop(text);
+                State.isGenerating = false;
+                DOM.sendBtn.disabled = false;
+                DOM.input.focus();
+                return;
+            }
+
+            // Standard Chat Route
             const aiId = `ai-${Date.now()}`;
-            const aiContentId = `${aiId}-content`;
-            addMessage('assistant', '', aiId);
-            
-            const aiContentDiv = document.getElementById(aiContentId);
+            UI.addMessage('assistant', '', aiId);
+            const contentDiv = document.getElementById(`${aiId}-content`);
             const loaderDiv = document.getElementById(`${aiId}-loader`);
 
+            State.chatHistory.push({ role: "user", content: text });
+
             try {
-                const chunks = await engine.chat.completions.create({
-                    messages,
-                    stream: true,
-                    temperature: 0.7,
-                    max_gen_len: 512
+                const fullResponse = await Engine.streamChat(State.chatHistory, (chunk) => {
+                    loaderDiv.style.display = 'none';
+                    contentDiv.innerHTML = marked.parse(chunk);
+                    DOM.chatContainer.scrollTo({ top: DOM.chatContainer.scrollHeight, behavior: 'auto' });
                 });
-
-                let fullResponse = "";
-                let firstChunk = true;
-
-                for await (const chunk of chunks) {
-                    if (firstChunk) {
-                        loaderDiv.style.display = 'none';
-                        firstChunk = false;
-                    }
-                    const delta = chunk.choices[0]?.delta?.content || "";
-                    fullResponse += delta;
-                    aiContentDiv.innerHTML = marked.parse(fullResponse);
-                    scrollToBottom();
-                }
-
-                messages.push({ role: "assistant", content: fullResponse });
-
+                State.chatHistory.push({ role: "assistant", content: fullResponse });
             } catch (err) {
-                loaderDiv.style.display = 'none';
-                aiContentDiv.innerHTML += `<div class="text-red-500 mt-2 font-mono text-xs bg-red-50 p-2 rounded">Error: ${err.message}</div>`;
+                contentDiv.innerHTML += `<div class="text-red-500">Error: ${err.message}</div>`;
             } finally {
-                el.send.disabled = false;
-                el.input.focus();
+                loaderDiv.remove();
+                State.isGenerating = false;
+                DOM.sendBtn.disabled = false;
+                DOM.input.focus();
             }
         });
 
-        // Helper: Add Message to DOM
-        function addMessage(role, text, id = null) {
-            const isUser = role === 'user';
-            const div = document.createElement('div');
-            div.className = `flex gap-4 max-w-3xl mx-auto w-full message-animation ${isUser ? 'flex-row-reverse' : ''}`;
+        // 4. Mode Switching
+        DOM.modeChatBtn.addEventListener('click', async () => {
+            if (!State.isImageMode) return; // Already in chat
             
-            const avatar = isUser
-                ? `<div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center flex-shrink-0 text-xs shadow-sm"><i class="fa-solid fa-user"></i></div>`
-                : `<div class="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center flex-shrink-0 text-xs shadow-sm"><i class="fa-solid fa-robot"></i></div>`;
+            // Switch UI
+            DOM.modeChatBtn.className = "flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium bg-slate-700 text-white shadow-sm transition-all";
+            DOM.modeImageBtn.className = "flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all";
+            DOM.imagePanel.classList.add('hidden');
+            DOM.modelSelect.parentElement.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+            
+            State.isImageMode = false;
+            
+            // Logic: Note that we don't auto-reload LLM here to save user from accidental clicks.
+            // But if LLM was unloaded, they will see the "Initialize" screen.
+            if (!State.engine) {
+                DOM.welcome.classList.remove('hidden');
+            }
+        });
 
-            let contentHTML;
+        DOM.modeImageBtn.addEventListener('click', async () => {
+            if (State.isImageMode) return;
+
+            // Warn/Unload LLM
+            if (State.engine) {
+                const confirmSwitch = confirm("Switching to Image Mode requires unloading the Chat Model to free up memory. Continue?");
+                if (!confirmSwitch) return;
+                await Engine.unload();
+            }
+
+            // Switch UI
+            DOM.modeImageBtn.className = "flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium bg-pink-600 text-white shadow-sm transition-all";
+            DOM.modeChatBtn.className = "flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all";
+            DOM.imagePanel.classList.remove('hidden');
+            DOM.modelSelect.parentElement.parentElement.classList.add('opacity-50', 'pointer-events-none');
             
-            if (id) {
-                // AI Placeholder state
-                contentHTML = `
-                    <div id="${id}-content" class="prose prose-sm prose-slate max-w-none"></div>
-                    <div id="${id}-loader" class="flex gap-1 py-1">
-                        <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
-                        <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
-                        <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
-                    </div>
-                `;
+            // Hide welcome screen immediately as Image Gen "loads" instantly (since it's mocked or lightweight)
+            DOM.welcome.classList.add('hidden');
+            DOM.input.disabled = false;
+            DOM.sendBtn.disabled = false;
+            DOM.input.placeholder = "Describe an image to generate...";
+            DOM.input.focus();
+
+            State.isImageMode = true;
+            UI.addMessage('system', 'Image Generation Mode Active. Chat Model unloaded.');
+        });
+
+        // 5. Agent Toggle
+        DOM.agentToggle.addEventListener('change', (e) => {
+            State.isAgentMode = e.target.checked;
+            if (State.isAgentMode) {
+                DOM.agentPanel.classList.remove('hidden');
+                DOM.agentBadge.classList.remove('hidden');
+                DOM.agentPanel.classList.add('block');
+                DOM.input.placeholder = "Enter a complex task for the Agent Swarm...";
             } else {
-                // User text (escaped by simple text node insertion)
-                contentHTML = `<div class="whitespace-pre-wrap">${escapeHtml(text)}</div>`;
+                DOM.agentPanel.classList.add('hidden');
+                DOM.agentBadge.classList.add('hidden');
+                DOM.input.placeholder = "Type a message...";
             }
-
-            const bubbleClass = isUser 
-                ? 'bg-slate-800 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm text-sm' 
-                : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm text-sm w-full';
-
-            div.innerHTML = `
-                ${avatar}
-                <div class="${bubbleClass}">${contentHTML}</div>
-            `;
-            
-            el.chatBox.appendChild(div);
-            scrollToBottom(true);
-        }
-
-        function scrollToBottom(force = false) {
-            const isAtBottom = el.chatBox.scrollHeight - el.chatBox.scrollTop <= el.chatBox.clientHeight + 100;
-            if (force || isAtBottom) {
-                el.chatBox.scrollTo({ top: el.chatBox.scrollHeight, behavior: 'smooth' });
-            }
-        }
-
-        // Auto-resize textarea
-        el.input.addEventListener('input', function() {
+        });
+        
+        // 6. Agent Panel Visibility
+        // Show agent panel only if not in image mode and toggle is checked
+        // (Handled by toggle listener)
+        
+        // 7. Auto-resize Input
+        DOM.input.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
         });
 
-        // Enter key to send
-        el.input.addEventListener('keydown', (e) => {
+        DOM.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                el.send.click();
+                DOM.sendBtn.click();
             }
         });
 
-        // Basic XSS protection for user input
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        document.getElementById('clear-chat').addEventListener('click', () => {
+            DOM.chatContainer.innerHTML = '';
+            State.chatHistory = [];
+        });
+
     </script>
 </body>
 </html>
