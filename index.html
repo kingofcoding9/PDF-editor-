@@ -1,1647 +1,561 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-space">
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>OmniPDF Editor - Cyber UI (Full Featured)</title>
-    <meta name="description" content="A cyberpunk-styled PDF editor with advanced annotation features, including adding text, shapes, images, signatures, and freehand drawing." />
-
-    <!-- TailwindCSS CDN -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Qwen 0.5B - WebGPU LLM Test</title>
+    <meta name="description" content="Run a tiny Qwen 0.5B instruct model directly in your browser using WebGPU. No server required.">
+    
+    <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    
-    <!-- PDF-lib & fontkit -->
-    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
-
-    <!-- Inter Font -->
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'space': '#050505',
-                        'neon': {
-                            400: '#00f3ff',
-                            500: '#7c4dff',
-                            600: '#00ff7f',
-                        },
-                        'alert': {
-                            500: '#ff3b3b'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
-                    },
-                    boxShadow: {
-                        'neon': '0 0 15px rgba(0, 243, 255, 0.3)',
-                        'neon-lg': '0 0 30px rgba(0, 243, 255, 0.4)',
-                        'inner-glow': 'inset 0 0 20px rgba(0, 243, 255, 0.15)'
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; touch-action: none; }
-        .cyber-panel { background: rgba(10, 10, 20, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(0, 243, 255, 0.2); box-shadow: 0 0 30px rgba(0, 243, 255, 0.1), inset 0 0 10px rgba(0, 243, 255, 0.05); }
-        .cyber-btn { background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), rgba(124, 77, 255, 0.1)); border: 1px solid rgba(0, 243, 255, 0.3); transition: all 0.2s ease; }
-        .cyber-btn:hover { background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(124, 77, 255, 0.2)); box-shadow: 0 0 15px rgba(0, 243, 255, 0.3); transform: translateY(-1px); }
-        .cyber-btn.active { background: rgba(0, 243, 255, 0.25); box-shadow: 0 0 20px rgba(0, 243, 255, 0.4); }
-        .glow-text { text-shadow: 0 0 8px rgba(0, 243, 255, 0.6); }
-        
-        #overlay-layer { cursor: default; }
-        .overlay-el { position: absolute; border: 1px solid transparent; box-sizing: border-box; user-select: none; touch-action: none; }
-        .overlay-el.selected { outline: 1px dashed #00f3ff; background: rgba(0, 243, 255, 0.05); z-index: 50; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* PDF text hit-layer (for editing existing text) */
-        #pdf-text-layer { pointer-events: none; }
-        #pdf-text-layer.active { pointer-events: auto; }
-        #pdf-text-layer span { color: transparent !important; text-shadow: none !important; }
-        #pdf-text-layer.active span { cursor: text; }
-        #pdf-text-layer.active span.pdf-text-run:hover { background: rgba(0, 243, 255, 0.08); outline: 1px dashed rgba(0, 243, 255, 0.45); }
-        #pdf-text-layer.active span.pdf-text-run.selected { background: rgba(124, 77, 255, 0.12); outline: 1px dashed rgba(124, 77, 255, 0.55); }
-        
-        .resize-handle { position: absolute; width: 12px; height: 12px; background: #00f3ff; border-radius: 50%; right: -6px; bottom: -6px; cursor: se-resize; display: none; box-shadow: 0 0 8px rgba(0, 243, 255, 0.5); }
-        .overlay-el.selected .resize-handle { display: block; }
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .message-animation { animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 
-        @media (pointer: coarse) {
-            .resize-handle { width: 18px; height: 18px; right: -9px; bottom: -9px; }
-        }
+        /* Typing Indicator */
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-        .text-content-area { outline: none; width: 100%; height: 100%; overflow: hidden; word-wrap: break-word; white-space: pre-wrap; }
-        .overlay-el.editing { border: 1px solid #00f3ff; user-select: text; }
-        .overlay-el.editing .text-content-area { user-select: text; }
-
-        /* Drawing layer styles */
-        #drawing-layer.active { pointer-events: auto; cursor: crosshair; }
-        #drawing-layer { pointer-events: none; }
-        
-        /* Scrollbars */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: rgba(10, 10, 20, 0.5); }
-        ::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.2); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 243, 255, 0.4); }
+        /* Markdown Styles */
+        .prose pre { background-color: #f1f5f9; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .prose code { color: #ea580c; font-family: monospace; background-color: #fff7ed; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+        .prose pre code { color: #334155; background-color: transparent; padding: 0; }
+        .prose p { margin-bottom: 0.5rem; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.5rem; }
     </style>
 </head>
+<body class="bg-slate-50 text-slate-800 h-[100dvh] flex flex-col font-sans overflow-hidden">
 
-<body class="font-sans text-white">
-    <!-- Starfield background -->
-    <canvas id="starfield" class="fixed inset-0 z-0"></canvas>
-
-    <!-- Start Screen -->
-    <div id="start-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-space/90 backdrop-blur-xl">
-        <div class="cyber-panel p-8 rounded-2xl w-full max-w-md text-center relative overflow-hidden shadow-neon-lg">
-            <div class="absolute inset-0 opacity-20">
-                <div class="w-64 h-64 bg-neon-400/20 rounded-full blur-3xl absolute -top-32 -left-32 animate-pulse"></div>
-                <div class="w-64 h-64 bg-neon-500/20 rounded-full blur-3xl absolute -bottom-32 -right-32 animate-pulse delay-1000"></div>
+    <!-- Header -->
+    <header class="flex-none bg-white border-b border-slate-200 px-4 py-3 shadow-sm flex items-center justify-between z-20">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center text-white shadow-md">
+                <i class="fa-solid fa-microchip"></i>
             </div>
-            <div class="relative">
-                <div class="flex items-center justify-center gap-3 mb-4">
-                    <div class="w-12 h-12 bg-neon-400/10 rounded-xl flex items-center justify-center border border-neon-400/30 shadow-neon">
-                        <i data-lucide="file-edit" class="text-neon-400" width="24"></i>
-                    </div>
-                    <h1 class="text-3xl font-bold glow-text text-neon-400 font-mono tracking-wider">OMNI<span class="text-neon-500">PDF</span></h1>
-                </div>
-                <p class="text-slate-400 mb-8 leading-relaxed">Cyberpunk PDF Editor. Add text, shapes, images, signatures, draw, rotate pages, and now edit existing PDF text.</p>
-                
-                <div class="space-y-4">
-                    <button onclick="launchApp('upload')" class="cyber-btn w-full py-4 px-6 rounded-xl font-semibold flex items-center justify-center gap-3 group">
-                        <i data-lucide="upload" class="text-neon-400 group-hover:scale-110 transition-transform" width="20"></i>
-                        <span>UPLOAD PDF</span>
-                    </button>
-                    <button onclick="launchApp('create')" class="cyber-btn w-full py-4 px-6 rounded-xl font-semibold flex items-center justify-center gap-3 group">
-                        <i data-lucide="file-plus" class="text-neon-600 group-hover:scale-110 transition-transform" width="20"></i>
-                        <span>CREATE NEW</span>
-                    </button>
-                </div>
-                
-                <div class="mt-8 text-xs text-slate-500 font-mono">
-                    DRAG TO PAN • PINCH TO ZOOM • CTRL/CMD+WHEEL TO ZOOM
+            <div>
+                <h1 class="font-bold text-base text-slate-900 leading-tight">Qwen 0.5B</h1>
+                <div class="flex items-center gap-1.5">
+                    <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-300"></span>
+                    <p id="status-text" class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Idle</p>
                 </div>
             </div>
         </div>
-        <input type="file" id="file-input" accept="application/pdf" class="hidden" />
-    </div>
-
-    <!-- Main App -->
-    <div id="dashboard" class="relative z-10 h-full flex flex-col opacity-0 transition-opacity duration-1000 hidden">
-        <!-- Top Bar -->
-        <header class="cyber-panel h-16 flex items-center justify-between px-4 md:px-6 gap-4 z-40">
-            <div class="flex items-center gap-3 min-w-0">
-                <button onclick="toggleSidebar('left')" class="cyber-btn p-2 rounded-lg md:hidden">
-                    <i data-lucide="menu" width="18"></i>
-                </button>
-                <div class="flex items-center gap-2 min-w-0">
-                    <div class="w-8 h-8 bg-neon-400/10 rounded-lg flex items-center justify-center border border-neon-400/30">
-                        <i data-lucide="file-edit" class="text-neon-400" width="16"></i>
-                    </div>
-                    <h1 class="text-lg md:text-xl font-bold text-neon-400 font-mono tracking-wide truncate">OMNI<span class="text-neon-500">PDF</span></h1>
-                </div>
-            </div>
-            
-            <div class="flex items-center gap-2 flex-wrap justify-end">
-                <div class="hidden sm:flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10">
-                    <i data-lucide="zoom-in" class="text-neon-400" width="14"></i>
-                    <span id="zoom-disp" class="text-xs font-mono text-neon-400">100%</span>
-                </div>
-                
-                <div class="flex gap-1 md:gap-2">
-                    <button onclick="undo()" class="cyber-btn p-2 rounded-lg" title="Undo (Ctrl+Z)">
-                        <i data-lucide="undo" width="16"></i>
-                    </button>
-                    <button onclick="redo()" class="cyber-btn p-2 rounded-lg" title="Redo (Ctrl+Shift+Z)">
-                        <i data-lucide="redo" width="16"></i>
-                    </button>
-                </div>
-
-                <button id="export-btn" onclick="exportPDF()" class="cyber-btn px-3 md:px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-neon" title="Export PDF">
-                    <i data-lucide="download" width="16"></i>
-                    <span class="hidden sm:inline">EXPORT</span>
-                </button>
-                
-                <button onclick="toggleSidebar('right')" class="cyber-btn p-2 rounded-lg md:hidden" title="Properties">
-                    <i data-lucide="sliders" width="18"></i>
-                </button>
-            </div>
-        </header>
-
-        <main class="flex-1 flex overflow-hidden">
-            <!-- Left Sidebar -->
-            <aside id="left-sidebar" class="cyber-panel w-72 md:w-80 flex-shrink-0 flex flex-col absolute md:relative h-full z-30 md:z-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300">
-                <!-- Tabs -->
-                <div class="flex border-b border-white/10">
-                    <button id="tab-btn-pages" onclick="setLeftTab('pages')" class="flex-1 py-3 text-neon-400 border-b-2 border-neon-400 bg-white/5 flex items-center justify-center">
-                        <i data-lucide="layers" width="16" class="mr-2"></i>PAGES
-                    </button>
-                    <button id="tab-btn-layers" onclick="setLeftTab('layers')" class="flex-1 py-3 text-slate-500 hover:text-white flex items-center justify-center">
-                        <i data-lucide="stack" width="16" class="mr-2"></i>LAYERS
-                    </button>
-                    <button id="tab-btn-sigs" onclick="setLeftTab('sigs')" class="flex-1 py-3 text-slate-500 hover:text-white flex items-center justify-center">
-                        <i data-lucide="pen-tool" width="16" class="mr-2"></i>SIGS
-                    </button>
-                </div>
-
-                <!-- Pages Tab -->
-                <div id="tab-pages" class="flex-1 overflow-y-auto p-4">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-bold text-neon-400 font-mono">PAGES <span id="total-pages" class="text-slate-500">(0)</span></h2>
-                        <button onclick="addNewPage()" class="cyber-btn p-2 rounded-lg" title="Add Page">
-                            <i data-lucide="plus" width="14"></i>
-                        </button>
-                    </div>
-                    <div id="thumbnails-container" class="space-y-2"></div>
-                </div>
-
-                <!-- Layers Tab -->
-                <div id="tab-layers" class="flex-1 overflow-y-auto p-4 hidden">
-                    <h2 class="text-sm font-bold text-neon-400 font-mono mb-4">LAYER STACK</h2>
-                    <div id="layers-list" class="space-y-1"></div>
-                </div>
-
-                <!-- Signatures Tab -->
-                <div id="tab-sigs" class="flex-1 overflow-y-auto p-4 hidden">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-bold text-neon-400 font-mono">SIGNATURES</h2>
-                        <button onclick="openSignatureModal()" class="cyber-btn p-2 rounded-lg" title="New Signature">
-                            <i data-lucide="plus" width="14"></i>
-                        </button>
-                    </div>
-                    <div id="signatures-list" class="space-y-2"></div>
-                </div>
-            </aside>
-
-            <!-- Workspace -->
-            <section id="workspace" class="flex-1 relative overflow-hidden bg-space touch-none">
-                <!-- Toolbar -->
-                <div class="absolute top-4 left-1/2 transform -translate-x-1/2 cyber-panel px-3 py-2 rounded-xl flex items-center gap-2 z-20 shadow-neon">
-                    <button onclick="setTool('select')" id="btn-select" class="cyber-btn active p-2 rounded" title="Select (V)"><i data-lucide="mouse-pointer-2" width="18"></i></button>
-                        <button onclick="setTool('pdftext')" id="btn-pdftext" class="cyber-btn p-2 rounded" title="Edit PDF Text (E)"><i data-lucide="scan-text" width="18"></i></button>
-                    <button onclick="setTool('draw')" id="btn-draw" class="cyber-btn p-2 rounded" title="Draw (D)"><i data-lucide="pencil" width="18"></i></button>
-                    <div class="w-px h-6 bg-white/20 mx-1"></div>
-                    <button onclick="addText()" class="cyber-btn p-2 rounded" title="Add Text (T)"><i data-lucide="type" width="18"></i></button>
-                    <button onclick="addRect()" class="cyber-btn p-2 rounded" title="Add Rectangle"><i data-lucide="square" width="18"></i></button>
-                    <button onclick="addHighlight()" class="cyber-btn p-2 rounded" title="Highlight"><i data-lucide="highlighter" width="18"></i></button>
-                    <button onclick="triggerImageUpload()" class="cyber-btn p-2 rounded" title="Add Image"><i data-lucide="image-plus" width="18"></i></button>
-                    <input type="file" id="img-upload" accept="image/*" class="hidden">
-                    <div class="w-px h-6 bg-white/20 mx-1 hidden md:block"></div>
-                    <button onclick="addStamp('APPROVED', '#00ff7f')" class="cyber-btn p-2 rounded hidden md:block" title="Approved Stamp"><i data-lucide="check-circle" width="18"></i></button>
-                    <button onclick="addStamp('REJECTED', '#ff3b3b')" class="cyber-btn p-2 rounded hidden md:block" title="Rejected Stamp"><i data-lucide="x-circle" width="18"></i></button>
-                </div>
-
-                <!-- Canvas Container -->
-                <div id="pan-container" class="absolute inset-0 transform-origin-top-left">
-                    <div id="canvas-wrapper" class="relative">
-                        <!-- Page BG Layer -->
-                        <div id="page-bg-layer" class="absolute inset-0 z-5"></div>
-
-                        <canvas id="pdf-canvas" class="block relative z-10 shadow-neon"></canvas>
-                        <canvas id="drawing-layer" class="absolute inset-0 touch-none z-20"></canvas>
-                                <div id="pdf-text-layer" class="absolute inset-0 overflow-hidden z-25"></div>
-                                <div id="overlay-layer" class="absolute inset-0 overflow-hidden z-30"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Right Sidebar -->
-            <aside id="right-sidebar" class="cyber-panel w-72 md:w-80 flex-shrink-0 flex flex-col absolute md:relative right-0 h-full z-30 md:z-0 transform translate-x-full md:translate-x-0 transition-transform duration-300 hidden md:flex">
-                <div class="p-4 border-b border-white/10">
-                    <h2 class="text-sm font-bold text-neon-400 font-mono flex items-center gap-2">
-                        <i data-lucide="sliders" width="16"></i>
-                        PROPERTIES
-                    </h2>
-                </div>
-
-                <div id="props-content" class="flex-1 overflow-y-auto p-4 space-y-6">
-                    <!-- No Selection -->
-                    <div id="no-selection" class="text-center text-slate-500 py-8">
-                        <i data-lucide="mouse-pointer-2" class="mx-auto mb-3 opacity-50" width="32"></i>
-                        <p class="text-sm">Select an element to edit properties</p>
-                    </div>
-
-                    <!-- Element Properties -->
-                    <div id="element-props" class="space-y-6 hidden">
-                        <!-- Position & Size -->
-                        <div class="space-y-3">
-                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Transform</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">X</label>
-                                    <input type="number" id="prop-x" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('x', parseFloat(this.value))">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Y</label>
-                                    <input type="number" id="prop-y" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('y', parseFloat(this.value))">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">W</label>
-                                    <input type="number" id="prop-w" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('width', parseFloat(this.value))">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">H</label>
-                                    <input type="number" id="prop-h" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('height', parseFloat(this.value))">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Style -->
-                        <div class="space-y-3" id="prop-color-group">
-                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Style</h3>
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Color</label>
-                                <input type="color" id="prop-color" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('color', this.value)">
-                            </div>
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Opacity</label>
-                                <input type="range" id="prop-opacity" min="0" max="1" step="0.05" class="w-full" onchange="updateProp('opacity', parseFloat(this.value))">
-                            </div>
-
-                            <div class="space-y-3 pt-3 border-t border-white/10">
-                                <h4 class="text-[10px] font-bold text-neon-500 font-mono uppercase">Border</h4>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="text-[10px] text-slate-500 font-mono uppercase">Style</label>
-                                        <select id="prop-border-style" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('borderStyle', this.value)">
-                                            <option value="none">None</option>
-                                            <option value="solid">Solid</option>
-                                            <option value="dashed">Dashed</option>
-                                            <option value="dotted">Dotted</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] text-slate-500 font-mono uppercase">Width</label>
-                                        <input type="number" id="prop-border-width" min="0" max="20" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('borderWidth', parseFloat(this.value))">
-                                    </div>
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Border Color</label>
-                                    <input type="color" id="prop-border-color" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('borderColor', this.value)">
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Border Radius</label>
-                                    <input type="number" id="prop-border-radius" min="0" max="100" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('borderRadius', parseFloat(this.value))">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Text Properties -->
-                        <div class="space-y-3 hidden" id="prop-text-group">
-                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Text</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Size</label>
-                                    <input type="number" id="prop-font-size" min="8" max="200" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('fontSize', parseFloat(this.value))">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Font</label>
-                                    <select id="prop-font-family" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('fontFamily', this.value)">
-                                        <option value="Inter">Inter</option>
-                                        <option value="Helvetica">Helvetica</option>
-                                        <option value="Times-Roman">Times</option>
-                                        <option value="Courier">Courier</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Align</label>
-                                <select id="prop-text-align" class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('textAlign', this.value)">
-                                    <option value="left">Left</option>
-                                    <option value="center">Center</option>
-                                    <option value="right">Right</option>
-                                </select>
-                            </div>
-                            
-                            <div class="flex gap-2">
-                                <button onclick="toggleTextStyle('bold')" class="cyber-btn flex-1 py-2 rounded text-xs font-mono" id="btn-bold">
-                                    <i data-lucide="bold" width="14" class="mx-auto"></i>
-                                </button>
-                                <button onclick="toggleTextStyle('italic')" class="cyber-btn flex-1 py-2 rounded text-xs font-mono" id="btn-italic">
-                                    <i data-lucide="italic" width="14" class="mx-auto"></i>
-                                </button>
-                                <button onclick="toggleTextStyle('underline')" class="cyber-btn flex-1 py-2 rounded text-xs font-mono" id="btn-underline">
-                                    <i data-lucide="underline" width="14" class="mx-auto"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Background</label>
-                                <input type="color" id="prop-bg-color" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('backgroundColor', this.value)">
-                            </div>
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-neon-600 font-mono uppercase">Link URL</label>
-                                <input type="text" id="prop-link" placeholder="https://..." class="w-full bg-black/40 border border-white/10 rounded p-1 text-xs text-neon-400 font-mono" onchange="updateProp('linkUrl', this.value)">
-                            </div>
-
-                            <div id="prop-pdfedit-group" class="space-y-3 pt-3 border-t border-white/10 hidden">
-                                <h4 class="text-[10px] font-bold text-neon-500 font-mono uppercase">PDF Text Replace</h4>
-                                <label class="flex items-center gap-2 text-xs text-slate-300">
-                                    <input type="checkbox" id="prop-redact" class="accent-neon-400" onchange="updateProp('redact', this.checked)">
-                                    <span>Redact original text</span>
-                                </label>
-                                <div class="space-y-2">
-                                    <label class="text-[10px] text-slate-500 font-mono uppercase">Redact Color</label>
-                                    <div class="flex items-center gap-2">
-                                        <input type="color" id="prop-redact-color" class="flex-1 h-8 bg-black/40 border border-white/10 rounded" onchange="updateProp('redactColor', this.value)">
-                                        <button class="cyber-btn px-3 py-2 rounded text-[10px] font-mono" onclick="updateProp('redactColor','auto')">AUTO</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Draw Properties -->
-                        <div class="space-y-3 hidden" id="draw-props">
-                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Draw Tool</h3>
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Stroke Color</label>
-                                <input type="color" id="draw-color" value="#00f3ff" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="state.drawColor=this.value">
-                            </div>
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Stroke Width</label>
-                                <input type="range" id="draw-width" min="1" max="20" value="2" class="w-full" onchange="state.drawWidth=parseFloat(this.value)">
-                            </div>
-                        </div>
-
-                        <!-- Page Properties -->
-                        <div class="space-y-3 pt-6 border-t border-white/10">
-                            <h3 class="text-xs font-bold text-neon-400 font-mono uppercase">Page</h3>
-                            <div class="space-y-2">
-                                <label class="text-[10px] text-slate-500 font-mono uppercase">Background</label>
-                                <input type="color" id="page-bg-color" value="#ffffff" class="w-full h-8 bg-black/40 border border-white/10 rounded" onchange="updatePageBg(this.value); updatePageProp('bgColor', this.value)">
-                            </div>
-                            
-                            <div class="grid grid-cols-2 gap-3">
-                                <button onclick="rotatePage(90)" class="cyber-btn py-2 rounded text-xs font-mono flex items-center justify-center gap-1">
-                                    <i data-lucide="rotate-cw" width="14"></i> ROTATE
-                                </button>
-                                <button onclick="deleteCurrentPage()" class="cyber-btn py-2 rounded text-xs font-mono flex items-center justify-center gap-1 text-alert-500">
-                                    <i data-lucide="trash" width="14"></i> DELETE
-                                </button>
-                            </div>
-                            
-                            <button onclick="resetView()" class="cyber-btn w-full py-2 rounded text-xs font-mono flex items-center justify-center gap-1">
-                                <i data-lucide="maximize-2" width="14"></i> FIT TO SCREEN
-                            </button>
-                        </div>
-
-                        <!-- Actions -->
-                        <div class="space-y-2 pt-6 border-t border-white/10">
-                            <button onclick="duplicateSelected()" class="cyber-btn w-full py-2 rounded text-xs font-mono flex items-center justify-center gap-2">
-                                <i data-lucide="copy" width="14"></i> DUPLICATE
-                            </button>
-                            <button onclick="deleteSelected()" class="cyber-btn w-full py-2 rounded text-xs font-mono flex items-center justify-center gap-2 text-alert-500">
-                                <i data-lucide="trash" width="14"></i> DELETE
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </aside>
-        </main>
-    </div>
-
-    <!-- Signature Modal -->
-    <div id="sig-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <div class="cyber-panel w-full max-w-lg rounded-2xl p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-bold text-neon-400 font-mono">CREATE SIGNATURE</h3>
-                <button onclick="document.getElementById('sig-modal').classList.add('hidden')" class="cyber-btn p-2 rounded-lg">
-                    <i data-lucide="x" width="16"></i>
-                </button>
-            </div>
-            <div class="bg-white rounded-xl p-2 mb-4">
-                <canvas id="sig-canvas" class="w-full h-40"></canvas>
-            </div>
-            <div class="flex gap-3">
-                <button onclick="clearSig()" class="cyber-btn flex-1 py-3 rounded-xl font-semibold">CLEAR</button>
-                <button onclick="saveSig()" class="cyber-btn flex-1 py-3 rounded-xl font-semibold text-neon-600">SAVE</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast -->
-    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 hidden">
-        <div class="cyber-panel px-6 py-3 rounded-xl text-sm font-mono text-neon-400 shadow-neon">
-            <span id="toast-message"></span>
-        </div>
-    </div>
-
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-        const fontkit = window.fontkit;
-
-        // --- UTILITIES ---
-        function hexToRgb(hex) {
-            hex = hex.replace('#','');
-            if(hex.length===3) hex = hex.split('').map(x=>x+x).join('');
-            const num = parseInt(hex,16);
-            return PDFLib.rgb(((num>>16)&255)/255, ((num>>8)&255)/255, (num&255)/255);
-        }
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-message').innerText = msg;
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 2500);
-        }
-
-        function initIcons() { lucide.createIcons(); }
-
-        // --- STATE ---
-        const state = {
-            pdfBytes: null,
-            pdfDoc: null,
-            pages: [], 
-            currentPage: 1,
-            currentViewport: null,
-            scale: 1.5,
-            zoom: 1,
-            pan: {x: 0, y: 0},
-            
-            elements: [],
-            selectedId: null,
-            tool: 'select',
-            isEditingText: false,
-
-            history: [],
-            historyStep: -1,
-
-            drawColor: '#00f3ff', drawWidth: 2,
-            pdfTextRuns: {}, pdfTextSpans: {}, pdfTextReady: {},
-            pdfTextMode: false
-        };
-
-        var canvas = document.getElementById('pdf-canvas');
-        var ctx = canvas.getContext('2d');
-        var drawCanvas = document.getElementById('drawing-layer');
-        var drawCtx = drawCanvas.getContext('2d');
-
-        var overlay = document.getElementById('overlay-layer');
-        var pdfTextLayer = document.getElementById('pdf-text-layer');
-        var workspace = document.getElementById('workspace');
-        var canvasWrapper = document.getElementById('canvas-wrapper');
         
-        var dragAction = null, isPanning = false, panStart = {x:0, y:0}, isPinching = false, pinchStartDist = 0, pinchStartZoom = 1, pinchWorld = {x:0, y:0}, isDrawing = false, currentPath = null;
-        var savedSignatures = JSON.parse(localStorage.getItem('omni_signatures')||'[]');
+        <a href="https://github.com/mlc-ai/web-llm" target="_blank" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <i class="fa-brands fa-github text-xl"></i>
+        </a>
+    </header>
 
-        // --- RENDERING ---
-        function renderElements() {
-            overlay.innerHTML = '';
-            const currentEls = state.elements.filter(e => e.page === state.currentPage);
-
-            currentEls.forEach(el => {
-                const div = document.createElement('div');
-                div.className = 'overlay-el';
-                div.dataset.id = el.id;
-                div.style.left = el.x + 'px';
-                div.style.top = el.y + 'px';
-                div.style.width = el.width + 'px';
-                div.style.height = el.height + 'px';
-                div.style.opacity = el.opacity ?? 1;
-
-                // Border styles
-                if (el.borderStyle && el.borderStyle !== 'none') {
-                    div.style.border = `${el.borderWidth || 1}px ${el.borderStyle} ${el.borderColor || '#00f3ff'}`;
-                } else {
-                    div.style.border = '1px solid transparent';
-                }
-                div.style.borderRadius = (el.borderRadius || 0) + 'px';
-
-                if (el.id === state.selectedId) div.classList.add('selected');
-
-                if (el.type === 'rect') {
-                    div.style.background = el.color;
-                } else if (el.type === 'text') {
-                    div.style.background = el.backgroundColor || 'transparent';
-                    const textArea = document.createElement('div');
-                    textArea.className = 'text-content-area';
-                    textArea.contentEditable = (el.id === state.selectedId && state.isEditingText);
-                    textArea.style.fontFamily = el.fontFamily;
-                    textArea.style.fontSize = el.fontSize + 'px';
-                    textArea.style.color = el.color;
-                    textArea.style.fontWeight = el.isBold ? 'bold' : 'normal';
-                    textArea.style.fontStyle = el.isItalic ? 'italic' : 'normal';
-                    textArea.style.textDecoration = el.isUnderline ? 'underline' : 'none';
-                    textArea.style.textAlign = el.textAlign || 'left';
-                    textArea.innerHTML = el.content;
-
-                    if (el.id === state.selectedId && state.isEditingText) {
-                        div.classList.add('editing');
-                        setTimeout(() => { textArea.focus(); }, 10);
-                        textArea.onblur = () => { el.content = textArea.innerHTML; state.isEditingText = false; renderElements(); addToHistory(); };
-                        textArea.oninput = () => { el.content = textArea.innerHTML; };
-                        textArea.onmousedown = (e) => e.stopPropagation();
-                        textArea.ontouchstart = (e) => e.stopPropagation();
-                    }
-                    div.appendChild(textArea);
-                } else if (el.type === 'image') {
-                    const img = document.createElement('img');
-                    img.src = el.content;
-                    img.style.width = '100%'; img.style.height = '100%';
-                    img.style.borderRadius = (el.borderRadius || 0) + 'px';
-                    img.style.objectFit = 'contain';
-                    div.appendChild(img);
-                } else if (el.type === 'draw') {
-                    const pathCanvas = document.createElement('canvas');
-                    pathCanvas.width = el.width;
-                    pathCanvas.height = el.height;
-                    pathCanvas.style.width = '100%';
-                    pathCanvas.style.height = '100%';
-                    const pCtx = pathCanvas.getContext('2d');
-                    pCtx.strokeStyle = el.color;
-                    pCtx.lineWidth = el.strokeWidth;
-                    pCtx.lineCap = 'round';
-                    pCtx.beginPath();
-                    if(el.points.length > 0) {
-                        pCtx.moveTo(el.points[0].x * (el.width/el.originalWidth), el.points[0].y * (el.height/el.originalHeight));
-                        for(let i=1; i<el.points.length; i++) {
-                            pCtx.lineTo(el.points[i].x * (el.width/el.originalWidth), el.points[i].y * (el.height/el.originalHeight));
-                        }
-                    }
-                    pCtx.stroke();
-                    div.appendChild(pathCanvas);
-                }
-
-                // Links show subtle cursor
-                if (el.linkUrl) div.style.cursor = 'pointer';
-
-                // Resize handle
-                if (el.id === state.selectedId && state.tool === 'select') {
-                    const handle = document.createElement('div');
-                    handle.className = 'resize-handle';
-                    div.appendChild(handle);
-                    handle.addEventListener('mousedown', e => { e.stopPropagation(); startResize(e, el); });
-                    handle.addEventListener('touchstart', e => { e.stopPropagation(); startResize(e.touches[0], el); }, {passive:false});
-                }
-
-                div.addEventListener('mousedown', e => { if(state.tool==='select') onElementMouseDown(e, el); });
-                div.addEventListener('touchstart', e => { if(state.tool==='select') onElementMouseDown(e.touches[0], el); }, {passive:false});
-
-                div.addEventListener('dblclick', e => {
-                    if(el.type === 'text' && el.id === state.selectedId) {
-                        state.isEditingText = true;
-                        renderElements();
-                    }
-                });
-
-                // Click link
-                div.addEventListener('click', e => {
-                    if(el.linkUrl && !dragAction && el.id === state.selectedId && !state.isEditingText) {
-                        window.open(el.linkUrl, '_blank');
-                    }
-                });
-                
-                overlay.appendChild(div);
-            });
-
-            renderLayers();
-            syncPdfTextSelection();
-        }
-
-        // --- PDF TEXT EDITING (existing PDF text) ---
-        function escapeHtml(str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        function mapFontFamily(cssFamily) {
-            const f = (cssFamily || '').toLowerCase();
-            if (f.includes('courier')) return 'Courier';
-            if (f.includes('times')) return 'Times-Roman';
-            return 'Helvetica';
-        }
-
-        function setPdfTextMode(on) {
-            state.pdfTextMode = !!on;
-            if (pdfTextLayer) pdfTextLayer.classList.toggle('active', !!on);
-        }
-
-        async function renderPdfTextLayerForPage(page, viewport, pageNum) {
-            if (!pdfTextLayer) return;
-            pdfTextLayer.innerHTML = '';
-            state.pdfTextRuns[pageNum] = [];
-            state.pdfTextSpans[pageNum] = {};
-            state.pdfTextReady[pageNum] = false;
-
-            try {
-                const textContent = await page.getTextContent({ normalizeWhitespace: true });
-                const textDivs = [];
-                const task = pdfjsLib.renderTextLayer({
-                    textContent,
-                    container: pdfTextLayer,
-                    viewport,
-                    textDivs,
-                    enhanceTextSelection: false,
-                });
-                await (task && task.promise ? task.promise : task);
-
-                const wrapperRect = canvasWrapper.getBoundingClientRect();
-                const scale = wrapperRect.width ? (canvas.width / wrapperRect.width) : 1;
-
-                for (let i = 0; i < textDivs.length; i++) {
-                    const div = textDivs[i];
-                    if (!div) continue;
-                    div.classList.add('pdf-text-run');
-                    const rid = `PT-${pageNum}-${i}`;
-                    div.dataset.runId = rid;
-
-                    const r = div.getBoundingClientRect();
-                    const x = (r.left - wrapperRect.left) * scale;
-                    const y = (r.top - wrapperRect.top) * scale;
-                    const w = r.width * scale;
-                    const h = r.height * scale;
-                    const cs = getComputedStyle(div);
-                    const fs = parseFloat(cs.fontSize || '16') * scale;
-                    const ff = cs.fontFamily || 'Helvetica';
-
-                    state.pdfTextRuns[pageNum].push({
-                        id: rid,
-                        page: pageNum,
-                        text: div.textContent || '',
-                        x, y, width: w, height: h,
-                        fontSize: fs,
-                        fontFamily: ff,
-                    });
-                    state.pdfTextSpans[pageNum][rid] = div;
-                }
-                state.pdfTextReady[pageNum] = true;
-                syncPdfTextSelection();
-            } catch (err) {
-                console.warn('PDF text layer render failed', err);
-            }
-        }
-
-        function syncPdfTextSelection() {
-            const spans = state.pdfTextSpans[state.currentPage];
-            if (!spans) return;
-            Object.values(spans).forEach(s => s && s.classList.remove('selected'));
-            const sel = state.elements.find(e => e.id === state.selectedId);
-            if (sel && sel.subtype === 'pdf-edit' && sel.pdfTextRunId && spans[sel.pdfTextRunId]) {
-                spans[sel.pdfTextRunId].classList.add('selected');
-            }
-        }
-
-        function startPdfTextEditByRunId(runId) {
-            const runs = state.pdfTextRuns[state.currentPage] || [];
-            const run = runs.find(r => r.id === runId);
-            if (!run) return;
-
-            let el = state.elements.find(e => e.page === state.currentPage && e.subtype === 'pdf-edit' && e.pdfTextRunId === runId);
-            if (!el) {
-                const pageData = state.pages[state.currentPage - 1] || { bgColor: '#ffffff' };
-                const fontFamily = mapFontFamily(run.fontFamily);
-                const fontSize = Math.max(8, Math.round(run.fontSize || 16));
-
-                el = {
-                    id: createId(),
-                    page: state.currentPage,
-                    type: 'text',
-                    subtype: 'pdf-edit',
-                    pdfTextRunId: runId,
-                    x: Math.max(0, run.x - 4),
-                    y: Math.max(0, run.y - 4),
-                    width: Math.max(20, run.width + 8),
-                    height: Math.max(fontSize * 1.2, run.height + 8),
-                    opacity: 1,
-                    content: escapeHtml(run.text || ''),
-                    fontSize,
-                    fontFamily,
-                    color: '#000000',
-                    textAlign: 'left',
-                    backgroundColor: pageData.bgColor || '#ffffff',
-                    redact: true,
-                    redactColor: 'auto',
-                };
-
-                state.elements.push(el);
-                addToHistory();
-            }
-
-            selectElement(el.id);
-            state.isEditingText = true;
-            renderElements();
-            if (window.innerWidth < 768) toggleSidebar('right', true);
-        }
-
-        function handlePdfTextPointerDown(e) {
-            if (state.tool !== 'pdftext') return;
-            const target = e.target && e.target.closest ? e.target.closest('.pdf-text-run') : null;
-            if (!target) return;
-            e.preventDefault();
-            e.stopPropagation();
-            startPdfTextEditByRunId(target.dataset.runId);
-        }
-
-        function renderLayers() {
-            const list = document.getElementById('layers-list'); list.innerHTML = '';
-            const pageEls = state.elements.filter(e => e.page === state.currentPage);
-            [...pageEls].reverse().forEach((el) => {
-                const div = document.createElement('div');
-                div.className = `layer-item p-2 flex items-center justify-between text-xs text-slate-300 border-b border-white/5 cursor-pointer ${state.selectedId === el.id ? 'active' : ''}`;
-                div.onclick = () => { selectElement(el.id); renderElements(); };
-                let icon = 'square'; if(el.type === 'text') icon = 'type'; if(el.type === 'image') icon = 'image'; if(el.type === 'draw') icon = 'pen-tool';
-                div.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="${icon}" width="14"></i><span class="truncate w-24">${el.type.toUpperCase()}</span></div><div class="flex gap-1"><button onclick="moveLayer('${el.id}', 1)"><i data-lucide="chevron-up" width="12"></i></button><button onclick="moveLayer('${el.id}', -1)"><i data-lucide="chevron-down" width="12"></i></button><button onclick="deleteLayer('${el.id}')" class="text-alert-500"><i data-lucide="trash" width="12"></i></button></div>`;
-                list.appendChild(div);
-            });
-            lucide.createIcons();
-        }
-
-        async function renderThumbnails() {
-            const container = document.getElementById('thumbnails-container'); container.innerHTML = '';
-            const activePages = state.pages.filter(p => !p.deleted).length;
-            document.getElementById('total-pages').innerText = `(${activePages})`;
-            for(let i=1; i<=state.pdfDoc.numPages; i++) {
-                if(state.pages[i-1].deleted) continue;
-                const pageData = state.pages[i-1];
-                const page = await state.pdfDoc.getPage(i);
-                const totalRotation = (page.rotate + pageData.rotation) % 360;
-                const unscaledVp = page.getViewport({ scale: 1, rotation: totalRotation });
-                const scale = 140 / unscaledVp.width;
-                const vp = page.getViewport({ scale: scale, rotation: totalRotation });
-                
-                const div = document.createElement('div');
-                div.className = `thumbnail cursor-pointer mb-4 mx-auto shadow-lg relative group transition-all duration-200 ${state.currentPage === i ? 'ring-2 ring-neon-400' : 'hover:ring-1 hover:ring-white/30'}`;
-                div.style.width = `${vp.width}px`; div.style.height = `${vp.height}px`; 
-                div.style.backgroundColor = pageData.bgColor;
-                // Thumbnail border preview
-                if (pageData.borderStyle && pageData.borderStyle !== 'none') {
-                    div.style.border = `${pageData.borderWidth * scale}px ${pageData.borderStyle} ${pageData.borderColor}`;
-                    div.style.boxSizing = 'border-box';
-                }
-
-                div.onclick = () => loadPage(i);
-
-                const pdfCanvas = document.createElement('canvas');
-                pdfCanvas.width = vp.width; pdfCanvas.height = vp.height;
-                pdfCanvas.className = 'absolute inset-0 block mix-blend-multiply';
-                page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp });
-                div.appendChild(pdfCanvas);
-
-                const elCanvas = document.createElement('canvas');
-                elCanvas.width = vp.width; elCanvas.height = vp.height;
-                elCanvas.className = 'absolute inset-0 pointer-events-none';
-                const elCtx = elCanvas.getContext('2d');
-                state.elements.filter(e => e.page === i).forEach(el => {
-                     const r = scale / state.scale;
-                     const x = el.x * r, y = el.y * r, w = el.width * r, h = el.height * r;
-                     
-                     // Draw Borders in Thumb
-                     if (el.borderStyle && el.borderStyle !== 'none') {
-                         elCtx.strokeStyle = el.borderColor;
-                         elCtx.lineWidth = el.borderWidth * r;
-                         if(el.borderStyle === 'dashed') elCtx.setLineDash([5*r, 5*r]);
-                         else if(el.borderStyle === 'dotted') elCtx.setLineDash([2*r, 2*r]);
-                         else elCtx.setLineDash([]);
-                         
-                         if(el.borderRadius) {
-                             elCtx.beginPath(); elCtx.roundRect(x,y,w,h, el.borderRadius*r); elCtx.stroke();
-                         } else {
-                             elCtx.strokeRect(x,y,w,h);
-                         }
-                         elCtx.setLineDash([]); // Reset
-                     }
-
-                     if (el.type === 'rect') { 
-                         elCtx.fillStyle = el.color; 
-                         if(el.borderRadius) { elCtx.beginPath(); elCtx.roundRect(x,y,w,h,el.borderRadius*r); elCtx.fill(); }
-                         else elCtx.fillRect(x, y, w, h); 
-                     }
-                     else if (el.type === 'text') { elCtx.fillStyle = el.color; elCtx.font = `${el.fontSize * r}px ${el.fontFamily}`; elCtx.fillText(el.content.replace(/<[^>]*>/g, ''), x, y + 10); } 
-                     else if (el.type === 'image') { const img = new Image(); img.src = el.content; img.onload = () => elCtx.drawImage(img, x, y, w, h); }
-                     else if (el.type === 'draw') {
-                         elCtx.save(); elCtx.translate(x, y); elCtx.scale(w/el.originalWidth, h/el.originalHeight);
-                         elCtx.beginPath(); elCtx.strokeStyle = el.color; elCtx.lineWidth = el.strokeWidth * r;
-                         if(el.points.length > 0) { elCtx.moveTo(el.points[0].x, el.points[0].y); for(let k=1; k<el.points.length; k++) elCtx.lineTo(el.points[k].x, el.points[k].y); elCtx.stroke(); }
-                         elCtx.restore();
-                     }
-                });
-                div.appendChild(elCanvas);
-                const label = document.createElement('div'); label.className = 'absolute bottom-0 w-full bg-black/60 text-white text-[10px] py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'; label.innerText = `PAGE ${i}`; div.appendChild(label);
-                container.appendChild(div);
-            }
-        }
-
-        function renderSignatures() {
-            const list = document.getElementById('signatures-list');
-            list.innerHTML = '';
-            savedSignatures.forEach((sig, idx) => {
-                const div = document.createElement('div');
-                div.className = 'signature-item bg-white rounded p-2 cursor-pointer border border-transparent hover:border-neon-400 group flex items-center justify-between';
-                div.onclick = () => window.addSignatureToCanvas(sig);
-                const img = document.createElement('img'); img.src = sig; img.className = 'h-8 object-contain pointer-events-none flex-1';
-                const del = document.createElement('button'); del.className = 'ml-2 p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500 hover:text-white transition-colors';
-                del.innerHTML = '<i data-lucide="trash-2" width="14" height="14"></i>'; del.onclick = (e) => { e.stopPropagation(); window.deleteSig(idx); };
-                div.appendChild(img); div.appendChild(del); list.appendChild(div);
-            });
-            lucide.createIcons();
-        }
-
-        async function loadPage(num) {
-            if(num < 1 || num > state.pdfDoc.numPages) return;
-            if(state.renderTask) { try { await state.renderTask.cancel(); } catch(e){} state.renderTask = null; }
-            const pageData = state.pages[num-1];
-            if (pageData.deleted) {
-                let next = -1;
-                for(let i=num; i<=state.pdfDoc.numPages; i++) if(!state.pages[i-1].deleted) { next=i; break; }
-                if(next===-1) for(let i=num; i>=1; i--) if(!state.pages[i-1].deleted) { next=i; break; }
-                if(next !== -1 && next !== num) return loadPage(next);
-                return;
-            }
-            state.currentPage = num; state.selectedId = null; state.isEditingText = false;
-            
-            document.querySelectorAll('.thumbnail').forEach(el => el.classList.remove('ring-2', 'ring-neon-400'));
-            
-            // Page Background & Border
-            const layer = document.getElementById('page-bg-layer');
-            layer.style.backgroundColor = pageData.bgColor;
-            if(pageData.borderStyle && pageData.borderStyle !== 'none') {
-                layer.style.border = `${pageData.borderWidth}px ${pageData.borderStyle} ${pageData.borderColor}`;
-            } else {
-                layer.style.border = 'none';
-            }
-            document.getElementById('page-bg-color').value = pageData.bgColor;
-            
-            const page = await state.pdfDoc.getPage(num);
-            const rot = (page.rotate + pageData.rotation) % 360;
-            state.currentViewport = page.getViewport({ scale: 1.0, rotation: rot });
-            const vp = page.getViewport({ scale: state.scale, rotation: rot });
-            
-            canvas.width = vp.width; canvas.height = vp.height;
-            drawCanvas.width = vp.width; drawCanvas.height = vp.height;
-            canvasWrapper.style.width = vp.width+'px'; canvasWrapper.style.height = vp.height+'px';
-            ctx.clearRect(0,0, canvas.width, canvas.height);
-            
-            state.renderTask = page.render({ canvasContext: ctx, viewport: vp });
-            try { await state.renderTask.promise; } catch(e) {} finally { state.renderTask = null; }
-            await renderPdfTextLayerForPage(page, vp, num);
-            renderElements(); updatePropsPanel(); renderThumbnails();
-        }
-
-        // --- CORE LOGIC ---
-
-        window.toggleTextStyle = function(command) {
-            if(state.selectedId && state.isEditingText) {
-                document.execCommand(command, false, null);
-                const el = state.elements.find(e => e.id === state.selectedId);
-                const activeEl = document.querySelector('.overlay-el.editing .text-content-area');
-                if(el && activeEl) el.content = activeEl.innerHTML;
-            } else if (state.selectedId) {
-                const el = state.elements.find(e => e.id === state.selectedId);
-                if(el) {
-                    if(command === 'bold') el.isBold = !el.isBold;
-                    if(command === 'italic') el.isItalic = !el.isItalic;
-                    if(command === 'underline') el.isUnderline = !el.isUnderline;
-                    renderElements(); addToHistory();
-                }
-            }
-            updatePropsPanel();
-        };
-
-        window.updateProp = function(key, val) { 
-            if(!state.selectedId) return;
-            const el = state.elements.find(e=>e.id===state.selectedId); 
-            if(!el) return;
-
-            if (key === 'color' && state.isEditingText) {
-                document.execCommand('foreColor', false, val);
-                const activeEl = document.querySelector('.overlay-el.editing .text-content-area');
-                if(activeEl) el.content = activeEl.innerHTML;
-                return;
-            }
-
-            el[key] = val; 
-            
-            if(key === 'fontSize' && el.type === 'text') {
-                const dummy = document.createElement('div');
-                dummy.style.position = 'absolute'; dummy.style.visibility = 'hidden';
-                dummy.style.fontFamily = el.fontFamily; dummy.style.fontSize = val + 'px';
-                dummy.style.width = 'auto'; dummy.style.whiteSpace = 'pre-wrap';
-                dummy.innerHTML = el.content;
-                document.body.appendChild(dummy);
-                el.width = Math.max(50, dummy.offsetWidth + 15);
-                el.height = Math.max(val, dummy.offsetHeight);
-                document.body.removeChild(dummy);
-            }
-            
-            renderElements(); updatePropsPanel(); 
-        };
-
-        window.updatePageProp = function(key, val) {
-            const pageData = state.pages[state.currentPage - 1];
-            if(pageData) {
-                pageData[key] = val;
-                loadPage(state.currentPage); // Reload to update layer border
-                addToHistory();
-            }
-        };
-
-        window.deleteSelected = function() { if(state.selectedId) { state.elements = state.elements.filter(e => e.id !== state.selectedId); state.selectedId = null; renderElements(); updatePropsPanel(); addToHistory(); } };
-        window.duplicateSelected = function() { const el = state.elements.find(e => e.id === state.selectedId); if(el) { const c = JSON.parse(JSON.stringify(el)); c.id = createId(); c.x += 20; c.y += 20; state.elements.push(c); selectElement(c.id); renderElements(); addToHistory(); } };
-        window.setLeftTab = function(tab) {
-            document.getElementById('tab-pages').classList.toggle('hidden', tab !== 'pages'); 
-            document.getElementById('tab-layers').classList.toggle('hidden', tab !== 'layers'); 
-            document.getElementById('tab-sigs').classList.toggle('hidden', tab !== 'sigs');
-            ['pages','layers','sigs'].forEach(t => document.getElementById(`tab-btn-${t}`).className = tab===t ? 'flex-1 py-2 text-neon-400 border-b-2 border-neon-400 bg-white/5 flex items-center justify-center' : 'flex-1 py-2 text-slate-500 hover:text-white flex items-center justify-center');
-        };
-        window.toggleSidebar = function(side, f) { const el = document.getElementById(side + '-sidebar'); if(side === 'right') el.classList.toggle('hidden'); if(f || el.classList.contains(side==='left'?'-translate-x-full':'translate-x-full')) el.classList.remove(side==='left'?'-translate-x-full':'translate-x-full'); else el.classList.add(side==='left'?'-translate-x-full':'translate-x-full'); };
-        window.rotatePage = function(a) { if(state.currentPage>0) { const p = state.pages[state.currentPage-1]; p.rotation = (p.rotation+a)%360; loadPage(state.currentPage); addToHistory(); } };
-        window.deleteCurrentPage = function() { if(state.pages.filter(p=>!p.deleted).length<=1) return showToast("Min 1 Page"); state.pages[state.currentPage-1].deleted=true; let next = -1; for(let i=state.currentPage; i<=state.pdfDoc.numPages; i++) { if(!state.pages[i-1].deleted) { next=i; break; } } if(next===-1) { for(let i=state.currentPage; i>=1; i--) { if(!state.pages[i-1].deleted) { next=i; break; } } } if(next !== -1) loadPage(next); addToHistory(); showToast("Page Deleted"); };
-        window.addNewPage = async function() { try { const doc = await PDFLib.PDFDocument.load(state.pdfBytes); doc.addPage([595.28, 841.89]); state.pdfBytes = await doc.save(); state.pages.push({ index: state.pages.length+1, rotation: 0, deleted: false, bgColor: '#ffffff' }); const t = pdfjsLib.getDocument({data:state.pdfBytes.slice()}); state.pdfDoc = await t.promise; loadPage(state.pdfDoc.numPages); addToHistory(); } catch(e){ alert(e); } };
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col overflow-hidden relative">
         
-        function addToHistory() { if (state.historyStep < state.history.length - 1) state.history = state.history.slice(0, state.historyStep + 1); state.history.push(JSON.stringify({ elements: state.elements, pages: state.pages })); state.historyStep++; if (state.history.length > 30) { state.history.shift(); state.historyStep--; } renderThumbnails(); }
-        window.undo = function() { if (state.historyStep > 0) { state.historyStep--; restoreState(state.history[state.historyStep]); } };
-        window.redo = function() { if (state.historyStep < state.history.length - 1) { state.historyStep++; restoreState(state.history[state.historyStep]); } };
-        function restoreState(json) { const data = JSON.parse(json); state.elements = data.elements; state.pages = data.pages; 
-            const p = state.pages[state.currentPage-1]; 
-            const l = document.getElementById('page-bg-layer'); l.style.backgroundColor=p.bgColor; 
-            if(p.borderStyle && p.borderStyle !== 'none') l.style.border=`${p.borderWidth}px ${p.borderStyle} ${p.borderColor}`; else l.style.border='none';
-            document.getElementById('page-bg-color').value = p.bgColor; 
-            renderElements(); renderLayers(); renderThumbnails(); updatePropsPanel(); 
-        }
+        <!-- Welcome / Loading Screen -->
+        <div id="welcome-screen" class="absolute inset-0 z-10 bg-slate-50/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 transition-all duration-500">
+            <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-slate-100 ring-1 ring-slate-900/5">
+                <div class="w-16 h-16 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl shadow-inner">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                
+                <h2 class="text-2xl font-bold text-center text-slate-800 mb-2">Local AI Inference</h2>
+                <p class="text-slate-500 text-center mb-8 text-sm">
+                    Running Qwen 0.5B (~600MB) directly in your browser via WebGPU. No data leaves your device.
+                </p>
 
-        window.updatePageBg = function(c) { state.pages[state.currentPage-1].bgColor=c; document.getElementById('page-bg-layer').style.backgroundColor=c; };
-        function addElement(props) { const base = { id: createId(), page: state.currentPage, x: canvas.width/2 - (props.width||100)/2, y: canvas.height/2 - (props.height||50)/2, opacity: 1, ...props }; state.elements.push(base); selectElement(base.id); renderElements(); addToHistory(); if(window.innerWidth < 768) toggleSidebar('right', true); }
-        function selectElement(id) { state.selectedId = id; updatePropsPanel(); }
-        window.moveLayer = function(id, d) { const idx = state.elements.findIndex(e => e.id === id); if(idx < 0) return; const newIdx = idx + d; if(newIdx>=0 && newIdx<state.elements.length && state.elements[newIdx].page===state.elements[idx].page) { [state.elements[idx], state.elements[newIdx]] = [state.elements[newIdx], state.elements[idx]]; renderElements(); addToHistory(); } };
-        window.deleteLayer = function(id) { state.elements = state.elements.filter(e => e.id !== id); if(state.selectedId === id) { state.selectedId = null; updatePropsPanel(); } renderElements(); addToHistory(); };
-
-        function updatePropsPanel() {
-            const elProps = document.getElementById('element-props');
-            const noSel = document.getElementById('no-selection');
-            const textGroup = document.getElementById('prop-text-group');
-            const colorGroup = document.getElementById('prop-color-group');
-            if(!state.selectedId) { elProps.classList.add('hidden'); noSel.classList.remove('hidden'); return; }
-            const el = state.elements.find(e=>e.id===state.selectedId);
-            if(!el) return;
-            elProps.classList.remove('hidden'); noSel.classList.add('hidden');
-
-            // Common
-            document.getElementById('prop-x').value = Math.round(el.x);
-            document.getElementById('prop-y').value = Math.round(el.y);
-            document.getElementById('prop-w').value = Math.round(el.width);
-            document.getElementById('prop-h').value = Math.round(el.height);
-            document.getElementById('prop-opacity').value = el.opacity ?? 1;
-
-            // Borders
-            document.getElementById('prop-border-style').value = el.borderStyle || 'none';
-            document.getElementById('prop-border-width').value = el.borderWidth || 1;
-            document.getElementById('prop-border-color').value = el.borderColor || '#00f3ff';
-            document.getElementById('prop-border-radius').value = el.borderRadius || 0;
-
-            // Style group
-            if(el.type === 'rect' || el.type === 'text' || el.type === 'draw') {
-                colorGroup.classList.remove('hidden');
-                document.getElementById('prop-color').value = el.color || '#00f3ff';
-            } else {
-                colorGroup.classList.add('hidden');
-            }
-
-            // Text group
-            if(el.type === 'text') {
-                textGroup.classList.remove('hidden');
-                document.getElementById('prop-font-size').value = el.fontSize || 24;
-                document.getElementById('prop-font-family').value = el.fontFamily || 'Inter';
-                document.getElementById('prop-text-align').value = el.textAlign || 'left';
-                document.getElementById('prop-bg-color').value = el.backgroundColor || '#000000';
-                document.getElementById('prop-link').value = el.linkUrl || '';
-
-                // PDF text edit extras
-                const pdfGrp = document.getElementById('prop-pdfedit-group');
-                if (el.subtype === 'pdf-edit') {
-                    pdfGrp.classList.remove('hidden');
-                    document.getElementById('prop-redact').checked = !!el.redact;
-                    const pageBg = (state.pages[state.currentPage-1] && state.pages[state.currentPage-1].bgColor) ? state.pages[state.currentPage-1].bgColor : '#ffffff';
-                    document.getElementById('prop-redact-color').value = (el.redactColor && el.redactColor !== 'auto') ? el.redactColor : pageBg;
-                } else {
-                    pdfGrp.classList.add('hidden');
-                }
-            } else {
-                textGroup.classList.add('hidden');
-                document.getElementById('prop-pdfedit-group').classList.add('hidden');
-            }
-
-            // Text style button indicators
-            const bBold = document.getElementById('btn-bold');
-            const bIt = document.getElementById('btn-italic');
-            const bUnd = document.getElementById('btn-underline');
-            bBold.classList.toggle('active', !!el.isBold);
-            bIt.classList.toggle('active', !!el.isItalic);
-            bUnd.classList.toggle('active', !!el.isUnderline);
-        }
-
-        // --- Dragging and Resizing ---
-        function onElementMouseDown(e, el) {
-            e.preventDefault();
-            if(state.isEditingText) return;
-
-            selectElement(el.id);
-            renderElements();
-            dragAction = { type: 'move', id: el.id };
-            dragAction.startX = e.clientX;
-            dragAction.startY = e.clientY;
-            dragAction.origX = el.x;
-            dragAction.origY = el.y;
-        }
-        function startResize(e, el) {
-            dragAction = { type: 'resize', id: el.id };
-            dragAction.startX = e.clientX;
-            dragAction.startY = e.clientY;
-            dragAction.origW = el.width;
-            dragAction.origH = el.height;
-        }
-
-        function handleMove(clientX, clientY) {
-            if(!dragAction) return;
-            const el = state.elements.find(x => x.id === dragAction.id);
-            if(!el) return;
-            const dx = (clientX - dragAction.startX) / state.zoom;
-            const dy = (clientY - dragAction.startY) / state.zoom;
-
-            if(dragAction.type === 'move') {
-                el.x = dragAction.origX + dx;
-                el.y = dragAction.origY + dy;
-            } else if(dragAction.type === 'resize') {
-                el.width = Math.max(20, dragAction.origW + dx);
-                el.height = Math.max(20, dragAction.origH + dy);
-            }
-            renderElements();
-            updatePropsPanel();
-        }
-
-        // --- Drawing Tool ---
-        function startDraw(e) {
-            if(state.tool !== 'draw') return;
-            e.preventDefault();
-            const rect = drawCanvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / state.zoom;
-            const y = (e.clientY - rect.top) / state.zoom;
-
-            isDrawing = true;
-            currentPath = {
-                id: createId(),
-                page: state.currentPage,
-                type: 'draw',
-                points: [{x,y}],
-                color: state.drawColor,
-                strokeWidth: state.drawWidth,
-                x, y,
-                width: 1,
-                height: 1,
-                originalWidth: 1,
-                originalHeight: 1,
-                opacity: 1
-            };
-        }
-        function draw(e) {
-            if(!isDrawing || !currentPath) return;
-            e.preventDefault();
-            const rect = drawCanvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / state.zoom;
-            const y = (e.clientY - rect.top) / state.zoom;
-            currentPath.points.push({x,y});
-
-            // Update bounds
-            const xs = currentPath.points.map(p=>p.x);
-            const ys = currentPath.points.map(p=>p.y);
-            const minX = Math.min(...xs), maxX = Math.max(...xs);
-            const minY = Math.min(...ys), maxY = Math.max(...ys);
-            currentPath.x = minX;
-            currentPath.y = minY;
-            currentPath.width = maxX-minX;
-            currentPath.height = maxY-minY;
-            currentPath.originalWidth = currentPath.width || 1;
-            currentPath.originalHeight = currentPath.height || 1;
-
-            // Draw preview on drawing layer
-            drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
-            drawCtx.save();
-            drawCtx.strokeStyle = currentPath.color;
-            drawCtx.lineWidth = currentPath.strokeWidth;
-            drawCtx.lineCap = 'round';
-            drawCtx.beginPath();
-            const pts = currentPath.points;
-            drawCtx.moveTo(pts[0].x*state.zoom, pts[0].y*state.zoom);
-            for(let i=1;i<pts.length;i++) drawCtx.lineTo(pts[i].x*state.zoom, pts[i].y*state.zoom);
-            drawCtx.stroke();
-            drawCtx.restore();
-        }
-        function endDraw(e) {
-            if(!isDrawing || !currentPath) return;
-            isDrawing = false;
-            // Normalize points to element local coords
-            const baseX = currentPath.x, baseY = currentPath.y;
-            currentPath.points = currentPath.points.map(p => ({ x: p.x - baseX, y: p.y - baseY }));
-            currentPath.width = Math.max(1, currentPath.width);
-            currentPath.height = Math.max(1, currentPath.height);
-            currentPath.originalWidth = currentPath.width;
-            currentPath.originalHeight = currentPath.height;
-            state.elements.push(currentPath);
-            drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
-            currentPath = null;
-            addToHistory();
-            renderElements();
-        }
-
-        // --- Export Helper: Rasterize text if rich/custom/border ---
-        async function rasterizeTextElement(el) {
-            const tempCanvas = document.createElement('canvas');
-            const scaleFactor = 2; 
-            // Calculate size including border
-            const bw = el.borderWidth || 0;
-            tempCanvas.width = (el.width + bw*2) * scaleFactor;
-            tempCanvas.height = (el.height + bw*2) * scaleFactor;
-            const tCtx = tempCanvas.getContext('2d');
-            tCtx.scale(scaleFactor, scaleFactor);
-            // Offset for border
-            tCtx.translate(bw, bw);
-
-            // Construct SVG with rich text
-            const borderStyle = (el.borderStyle && el.borderStyle!=='none') ? 
-                `border: ${el.borderWidth}px ${el.borderStyle} ${el.borderColor}; border-radius: ${el.borderRadius||0}px; box-sizing: border-box;` : '';
-            
-            const svgData = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="${el.width}" height="${el.height}">
-                <foreignObject width="100%" height="100%">
-                    <div xmlns="http://www.w3.org/1999/xhtml" style="
-                        font-family: '${el.fontFamily}', sans-serif;
-                        font-size: ${el.fontSize}px;
-                        color: ${el.color};
-                        text-align: ${el.textAlign || 'left'};
-                        font-weight: ${el.isBold ? 'bold' : 'normal'};
-                        font-style: ${el.isItalic ? 'italic' : 'normal'};
-                        text-decoration: ${el.isUnderline ? 'underline' : 'none'};
-                        line-height: 1.2;
-                        overflow: hidden;
-                        ${borderStyle}
-                        background-color: ${el.backgroundColor || 'transparent'};
-                    ">
-                        ${el.content}
+                <!-- Requirements Check -->
+                <div id="gpu-error" class="hidden mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex gap-3 items-start">
+                    <i class="fa-solid fa-circle-exclamation text-red-500 mt-0.5 shrink-0"></i>
+                    <div>
+                        <p class="text-sm font-bold text-red-700">WebGPU Unavailable</p>
+                        <p class="text-xs text-red-600 mt-1">Please use Chrome 113+, Edge 113+, or a compatible browser. Ensure you are on HTTPS or localhost.</p>
                     </div>
-                </foreignObject>
-            </svg>`;
+                </div>
+
+                <!-- Progress Bar -->
+                <div id="progress-container" class="hidden mb-6 space-y-3">
+                    <div class="flex justify-between text-xs font-semibold text-orange-600">
+                        <span id="progress-label">Initializing...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div id="progress-bar" class="bg-orange-500 h-2 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(249,115,22,0.5)]" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-detail" class="text-[10px] text-slate-400 font-mono truncate">Preparing engine...</p>
+                </div>
+
+                <!-- Action Button -->
+                <button id="load-btn" class="w-full group relative overflow-hidden bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3.5 px-6 rounded-xl transition-all shadow-lg active:scale-95">
+                    <span class="relative z-10 flex items-center justify-center gap-2">
+                        Load Model <i class="fa-solid fa-download group-hover:translate-y-0.5 transition-transform"></i>
+                    </span>
+                </button>
+            </div>
             
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => { tCtx.drawImage(img, 0, 0); resolve(tempCanvas.toDataURL('image/png')); };
-                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
-            });
+            <p class="mt-8 text-xs text-slate-400 text-center max-w-xs">
+                Note: First load requires downloading ~600MB. Subsequent loads are instant (cached).
+            </p>
+        </div>
+
+        <!-- Chat Container -->
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-4">
+            <!-- Initial System Message -->
+            <div class="flex gap-4 max-w-3xl mx-auto opacity-60 hover:opacity-100 transition-opacity">
+                <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-orange-600 text-xs shadow-sm">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-600">
+                    Model loaded. I am ready to chat!
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area (Fixed at bottom, not absolute) -->
+        <div class="flex-none bg-white border-t border-slate-200 p-4 z-20">
+            <div class="max-w-3xl mx-auto relative">
+                <form id="chat-form" class="relative flex items-end gap-2">
+                    <div class="relative flex-1">
+                        <textarea 
+                            id="user-input" 
+                            rows="1"
+                            placeholder="Type a message..." 
+                            class="w-full bg-slate-100 text-slate-800 border-0 rounded-2xl pl-4 pr-4 py-3 focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all resize-none shadow-inner max-h-32 text-sm"
+                            disabled
+                        ></textarea>
+                    </div>
+                    <button 
+                        type="submit" 
+                        id="send-btn"
+                        class="h-11 w-11 flex items-center justify-center bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shrink-0 mb-[1px]"
+                        disabled
+                    >
+                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </main>
+
+    <script type="module">
+        // Using stable version 0.2.46 to minimize "Invalid URL" issues with recent strict parsing
+        import * as webllm from "https://esm.run/@mlc-ai/web-llm@0.2.46";
+        // Expose for debugging / non-module scripts
+        window.webllm = webllm;
+        const { CreateMLCEngine } = webllm;
+
+        // CONFIGURATION
+        // We use the EXACT path structure from the binary-mlc-llm-libs repository.
+        // Pick a tiny model for maximum compatibility.
+// We prefer a Qwen 0.5B instruct quantized build if present in the prebuilt list.
+const PREFERRED_MODEL_REGEXES = [
+  /Qwen\d*(?:\.\d+)?-0\.5B-?Instruct.*q4f/i,
+  /Qwen\d*(?:\.\d+)?-0\.5B-?Instruct/i,
+  /Qwen.*0\.5B.*Instruct/i,
+];
+
+function pickDefaultModelId() {
+  const list = webllm?.prebuiltAppConfig?.model_list ?? [];
+  for (const rx of PREFERRED_MODEL_REGEXES) {
+    const hit = list.find(m => rx.test(String(m.model_id)));
+    if (hit?.model_id) return hit.model_id;
+  }
+  // If no Qwen 0.5B is available in this WebLLM version, fall back to any tiny model.
+  const fallback = list.find(m => /0\.5B|1B|TinyLlama/i.test(String(m.model_id)));
+  return fallback?.model_id || (list[0]?.model_id ?? ""); // last resort
+}
+
+// NOTE: The selected model id is shown in the UI once the page loads.
+let MODEL_ID = "";
+
+/**
+ * OPTIONAL OVERRIDES
+ * - If you want to host model weights/config yourself (R2 / your CDN), set MODEL_URL_OVERRIDE
+ *   to the directory that contains mlc-chat-config.json, ndarray-cache.json, tokenizer.json, etc.
+ * - If you want to host the model library yourself, set MODEL_LIB_URL_OVERRIDE to the .wasm URL.
+ *
+ * If left empty, we try to use webllm.prebuiltAppConfig for MODEL_ID.
+ */
+const MODEL_URL_OVERRIDE = "";    // e.g. "https://huggingface.co/mlc-ai/Qwen2-0.5B-Instruct-q4f16_1-MLC"
+const MODEL_LIB_URL_OVERRIDE = ""; // e.g. webllm.modelLibURLPrefix + webllm.modelVersion + "/<...-webgpu.wasm>"
+
+function buildAppConfig() {
+  const list = webllm?.prebuiltAppConfig?.model_list ?? [];
+  const prebuilt = list.find(m => m.model_id === MODEL_ID);
+
+  const isAbsURL = (s) => {
+    try { new URL(s); return true; } catch { return false; }
+  };
+
+  const normalizeModelLib = (lib) => {
+    const v = String(lib || "");
+    if (!v) return v;
+    if (isAbsURL(v)) return v;
+    // Accept both "/file.wasm" and "file.wasm"
+    const file = v.replace(/^\/+/, "");
+    return `${webllm.modelLibURLPrefix}${webllm.modelVersion}/${file}`;
+  };
+
+  // Use prebuilt record if available (recommended).
+  if (prebuilt) {
+    const patched = { ...prebuilt };
+    // Some CDNs/bundlers can surface prebuilt model_lib as a bare filename; normalize it.
+    patched.model_lib = normalizeModelLib(MODEL_LIB_URL_OVERRIDE || patched.model_lib);
+    if (MODEL_URL_OVERRIDE) patched.model = MODEL_URL_OVERRIDE;
+    return { model_list: [patched] };
+  }
+
+  // Fall back to explicit overrides if MODEL_ID isn't prebuilt.
+  if (!MODEL_URL_OVERRIDE || !MODEL_LIB_URL_OVERRIDE) {
+    const available = list.map(m => m.model_id).slice(0, 50);
+    throw new Error(
+      `MODEL_ID "${MODEL_ID}" is not in webllm.prebuiltAppConfig.model_list and overrides are empty.\n` +
+      `Either:\n` +
+      `  1) Pick a model_id from prebuiltAppConfig (first 50): ${available.join(", ")}\n` +
+      `  2) Or set MODEL_URL_OVERRIDE and MODEL_LIB_URL_OVERRIDE (absolute https URLs).`
+    );
+  }
+
+  return {
+    model_list: [{
+      model_id: MODEL_ID,
+      model: MODEL_URL_OVERRIDE,
+      model_lib: MODEL_LIB_URL_OVERRIDE,
+    }],
+  };
+}
+
+const el = {
+            loadBtn: document.getElementById('load-btn'),
+            welcome: document.getElementById('welcome-screen'),
+            chatBox: document.getElementById('chat-container'),
+            form: document.getElementById('chat-form'),
+            input: document.getElementById('user-input'),
+            send: document.getElementById('send-btn'),
+            progressBox: document.getElementById('progress-container'),
+            progressBar: document.getElementById('progress-bar'),
+            progressText: document.getElementById('progress-percent'),
+            progressDetail: document.getElementById('progress-detail'),
+            statusText: document.getElementById('status-text'),
+            statusDot: document.getElementById('status-indicator'),
+            gpuError: document.getElementById('gpu-error')
+};
+
+        // Disable load until WebGPU preflight completes
+        el.loadBtn.disabled = true;
+        el.loadBtn.classList.add('opacity-60','cursor-not-allowed');
+        el.statusText.innerText = 'Checking WebGPU…';
+
+
+        function showFatal(title, body) {
+            el.gpuError.classList.remove('hidden');
+            el.loadBtn.classList.add('hidden');
+            const titleEl = el.gpuError.querySelector('p.text-sm');
+            const bodyEl = el.gpuError.querySelector('p.text-xs');
+            if (titleEl) titleEl.textContent = title;
+            if (bodyEl) bodyEl.textContent = body;
         }
 
-        // --- Export ---
-        window.exportPDF = async function() {
-            const btn = document.getElementById('export-btn'); 
-            btn.innerHTML = `<span class="animate-pulse">BUILDING...</span>`;
-            
+        let engine;
+        let messages = [
+            { role: "system", content: "You are a helpful, concise AI assistant." }
+        ];
+
+        // 1. Pre-flight Checks + Diagnostics
+        (async function initChecks() {
+            const lines = [];
+            const add = (k, v) => lines.push(`${k}: ${v}`);
+            add("URL", location.href);
+            add("Protocol", location.protocol);
+            add("SecureContext", String(window.isSecureContext));
+            add("UserAgent", navigator.userAgent);
+            add("navigator.gpu", String(!!navigator.gpu));
+            add("crossOriginIsolated", String(window.crossOriginIsolated));
+            add("SharedArrayBuffer", String(typeof SharedArrayBuffer !== "undefined"));
+            add("Top==Self", String(window.top === window));
+            // Permissions Policy visibility (helps debug iframe restrictions)
+            add("document.permissionsPolicy", String(!!document.permissionsPolicy));
             try {
-                const { PDFDocument, rgb, StandardFonts } = PDFLib;
-                const pdfDoc = await PDFDocument.load(state.pdfBytes);
-                
-                const toDel = []; state.pages.forEach((p,i)=> {if(p.deleted) toDel.push(i)}); toDel.sort((a,b)=>b-a).forEach(i=>pdfDoc.removePage(i));
-                const valid = state.pages.filter(p=>!p.deleted); 
-                
-                pdfDoc.registerFontkit(fontkit);
-                
-                for(let i=0; i<valid.length; i++) {
-                    const meta = valid[i], page = pdfDoc.getPage(i), {width, height} = page.getSize();
-                    if(meta.bgColor && meta.bgColor!=='#ffffff') page.drawRectangle({x:0, y:0, width, height, color:hexToRgb(meta.bgColor)});
-                    
-                    // Page Border
-                    if(meta.borderStyle && meta.borderStyle !== 'none') {
-                        const bw = meta.borderWidth || 1;
-                        const borderColor = hexToRgb(meta.borderColor);
-                        if(meta.borderStyle === 'solid') {
-                            page.drawRectangle({ x:0, y:0, width, height, borderColor, borderWidth:bw, color:undefined });
-                        } else if (meta.borderStyle === 'dashed' || meta.borderStyle === 'dotted') {
-                            // PDF-lib high level doesn't support dashed rect easily, manually draw lines
-                            const dash = meta.borderStyle === 'dashed' ? [10, 10] : [3, 3];
-                            // Top
-                            page.drawLine({ start:{x:0, y:height}, end:{x:width, y:height}, thickness:bw, color:borderColor, dashArray:dash });
-                            // Bottom
-                            page.drawLine({ start:{x:0, y:0}, end:{x:width, y:0}, thickness:bw, color:borderColor, dashArray:dash });
-                            // Left
-                            page.drawLine({ start:{x:0, y:0}, end:{x:0, y:height}, thickness:bw, color:borderColor, dashArray:dash });
-                            // Right
-                            page.drawLine({ start:{x:width, y:0}, end:{x:width, y:height}, thickness:bw, color:borderColor, dashArray:dash });
-                        }
-                    }
+                const feats = document.permissionsPolicy?.features?.() ?? [];
+                add("PP features (first 30)", feats.slice(0,30).join(",") + (feats.length>30?`…(+${feats.length-30})`:""));
+            } catch (e) {
+                add("PP features", "unavailable");
+            }
+            try { add("PP allows webgpu", String(document.permissionsPolicy?.allowsFeature?.("webgpu"))); } catch {}
+            try { add("PP allows gpu", String(document.permissionsPolicy?.allowsFeature?.("gpu"))); } catch {}
 
-                    if(meta.rotation) page.setRotation({type:'degrees', angle:(page.getRotation().angle+meta.rotation)%360});
-                    
-                    const els = state.elements.filter(e=>e.page===meta.index);
-                    for(const el of els) {
-                        const y = height-el.y-el.height;
-                        
-                        // Handle Rects & Images with Borders
-                        if (el.type === 'rect') {
-                            // If it has radius or special border, might need custom drawing
-                            if (el.borderRadius || el.borderStyle !== 'none') {
-                                // For now, simplest is raster if complex
-                                // But let's do basic rect
-                                const rectOpts = {
-                                    x: el.x, y, width: el.width, height: el.height,
-                                    color: hexToRgb(el.color), opacity: el.opacity,
-                                    borderColor: el.borderStyle !== 'none' ? hexToRgb(el.borderColor) : undefined,
-                                    borderWidth: el.borderStyle !== 'none' ? (el.borderWidth || 1) : 0,
-                                };
-                                page.drawRectangle(rectOpts);
-                            } else {
-                                page.drawRectangle({x:el.x, y, width:el.width, height:el.height, color:hexToRgb(el.color), opacity:el.opacity});
-                            }
-                        }
-                        else if(el.type==='text') { 
-                            // If this is a PDF text replacement, cover the original area first
-                            if (el.subtype === 'pdf-edit' && el.redact) {
-                                const cover = (el.redactColor && el.redactColor !== 'auto') ? el.redactColor : (meta.bgColor || '#ffffff');
-                                page.drawRectangle({x: el.x, y, width: el.width, height: el.height, color: hexToRgb(cover), opacity: 1});
-                            }
-                            const hasHtml = /<[a-z][\s\S]*>/i.test(el.content);
-                            const isStandardFont = ['Helvetica','Times-Roman','Courier'].some(f => el.fontFamily.includes(f));
-                            const hasBorder = el.borderStyle && el.borderStyle !== 'none';
-                            
-                            if (hasHtml || !isStandardFont || hasBorder) {
-                                // Rasterize if rich text, custom font, or HAS BORDER (simpler than drawing border in PDF manually around text)
-                                const pngData = await rasterizeTextElement(el);
-                                const pngImage = await pdfDoc.embedPng(pngData);
-                                page.drawImage(pngImage, { x: el.x, y: y, width: el.width, height: el.height });
-                            } else {
-                                let font = await pdfDoc.embedFont(StandardFonts[el.fontFamily.replace(' ', '')] || StandardFonts.Helvetica);
-                                if(el.isBold) font = await pdfDoc.embedFont(StandardFonts.HelveticaBold); 
-                                page.drawText(el.content.replace(/<[^>]*>/g, ''), {
-                                    x: el.x + 2, y: height - el.y - el.fontSize - 4,
-                                    size: el.fontSize, font, color: hexToRgb(el.color)
-                                });
-                            }
-                            if(el.linkUrl) {
-                                const link = pdfDoc.context.register(
-                                    pdfDoc.context.obj({
-                                        Type: 'Annot', Subtype: 'Link', Rect: [el.x, y, el.x + el.width, y + el.height],
-                                        Border: [0, 0, 0], A: { Type: 'Action', S: 'URI', URI: el.linkUrl }
-                                    })
-                                );
-                                page.node.addAnnot(link);
-                            }
-                        }
-                        else if(el.type==='image') { 
-                            try{ 
-                                const b=await fetch(el.content).then(r=>r.arrayBuffer()); 
-                                const em = el.content.startsWith('data:image/png')?await pdfDoc.embedPng(b):await pdfDoc.embedJpg(b); 
-                                page.drawImage(em, {x:el.x, y, width:el.width, height:el.height}); 
-                            }catch(e){} 
-                        }
-                        else if(el.type==='draw') {
-                            if(el.points.length > 1) {
-                                const sx = el.width / el.originalWidth, sy = el.height / el.originalHeight;
-                                for(let k=0; k<el.points.length-1; k++) {
-                                    const p1 = el.points[k], p2 = el.points[k+1];
-                                    page.drawLine({
-                                        start: { x: el.x + p1.x * sx, y: height - (el.y + p1.y * sy) },
-                                        end: { x: el.x + p2.x * sx, y: height - (el.y + p2.y * sy) },
-                                        thickness: el.strokeWidth * sx, color: hexToRgb(el.color), lineCap: 'round'
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                const b = new Blob([await pdfDoc.save()], {type:'application/pdf'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='omnipedf.pdf'; a.click();
-            } catch(e) { alert("Export Error: " + e.message); console.error(e); } 
-            finally { btn.innerHTML = `<i data-lucide="download" width="16"></i> <span class="hidden sm:inline">EXPORT</span>`; initIcons(); }
-        };
+            const diagToggle = document.getElementById('diag-toggle');
+            const diagBox = document.getElementById('diag-box');
+            const writeDiag = () => { if (diagBox) diagBox.textContent = lines.join('\n'); };
 
-        // Window Exports (Hoisted)
-        window.initApp = async function(data) {
+            if (diagToggle && diagBox) {
+                diagToggle.addEventListener('click', () => {
+                    const nowHidden = diagBox.classList.toggle('hidden');
+                    diagToggle.textContent = nowHidden ? 'show' : 'hide';
+                });
+            }
+
+            if (location.protocol === 'file:' || location.origin === 'null') {
+                add("ERROR", "Running under file:// or null origin");
+                writeDiag();
+                showFatal('Invalid URL context', 'Open this page over https:// or http://localhost (not as a local file).');
+                return;
+            }
+
+            if (!navigator.gpu) {
+                add("ERROR", "navigator.gpu missing");
+                writeDiag();
+                showFatal('WebGPU Unavailable', 'This browser/context does not expose WebGPU. Try Chrome/Edge (Android) or a desktop Chromium with WebGPU enabled, and use HTTPS.');
+                return;
+            }
+
+            // Attempt to acquire adapter/device so we can show a precise message.
+            let adapter = null;
             try {
-                if (state.renderTask) { await state.renderTask.cancel(); state.renderTask = null; }
-                const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
-                state.pdfBytes = u8.slice();
-                state.pdfDoc = await pdfjsLib.getDocument({ data: u8.slice() }).promise;
-                state.pages = Array.from({ length: state.pdfDoc.numPages }, (_, i) => ({ index: i+1, rotation: 0, deleted: false, bgColor: '#ffffff' }));
-                document.getElementById('start-screen').style.display = 'none';
-                await renderThumbnails(); renderSignatures();
-                state.currentPage = 1; await loadPage(1);
-                addToHistory(); 
-                setTimeout(() => {
-                    const dash = document.getElementById('dashboard'); dash.classList.remove('hidden'); void dash.offsetWidth; 
-                    resetView(); if(state.currentViewport) resetView(); 
-                    if(window.enterEditor) window.enterEditor();
-                    requestAnimationFrame(() => dash.style.opacity = '1');
-                }, 100);
-            } catch (err) { console.error(err); showToast("Load Error"); }
-        };
+                adapter = await navigator.gpu.requestAdapter(); // default
+                if (!adapter) adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+                if (!adapter) adapter = await navigator.gpu.requestAdapter({ powerPreference: 'low-power' });
 
-        window.createBlankPDF = async function() { try { const d = await PDFLib.PDFDocument.create(); d.addPage([595.28, 841.89]); const b = await d.save(); await window.initApp(b); } catch(e){ alert(e); } };
-        window.addText = function() { addElement({ type: 'text', content: 'Double click to edit', fontSize: 24, fontFamily: 'Helvetica', color: '#00f3ff', width: 200, height: 40 }); };
-        window.addRect = function() { addElement({ type: 'rect', color: '#00f3ff', width: 100, height: 100 }); };
-        window.addHighlight = function() { addElement({ type: 'rect', color: '#ffff00', opacity: 0.3, width: 200, height: 30 }); };
-        window.addStamp = function(text, color) { addElement({ type: 'text', content: text, fontSize: 36, fontFamily: 'Helvetica', color: color, width: 200, height: 50, isStamp: true }); };
-        window.setTool = function(t) {
-            state.tool = t;
-            // Tool button highlighting (limit to tool buttons)
-            ['btn-select','btn-pdftext','btn-draw'].forEach(id => {
-                const b = document.getElementById(id);
-                if (b) b.classList.remove('active');
-            });
-            if (t === 'select') document.getElementById('btn-select').classList.add('active');
-            if (t === 'pdftext') document.getElementById('btn-pdftext').classList.add('active');
-            if (t === 'draw') document.getElementById('btn-draw').classList.add('active');
-
-            // Drawing layer enable/disable
-            const dl = document.getElementById('drawing-layer');
-            if (t === 'draw') {
-                dl.classList.add('active');
-                document.getElementById('draw-props').classList.remove('hidden');
-                setPdfTextMode(false);
-                state.selectedId = null;
-                state.isEditingText = false;
-                renderElements();
-            } else {
-                dl.classList.remove('active');
-                document.getElementById('draw-props').classList.add('hidden');
-                setPdfTextMode(t === 'pdftext');
+                // Some implementations expose a compatibility mode; try it if available.
+                // (If unsupported, Chrome will just ignore the field.)
+                if (!adapter) adapter = await navigator.gpu.requestAdapter({ compatibilityMode: true });
+                if (!adapter) adapter = await navigator.gpu.requestAdapter({ powerPreference: 'low-power', compatibilityMode: true });
+} catch (e) {
+                add("requestAdapter exception", (e && (e.message || String(e))) || "unknown");
             }
-        };
-        window.openSignatureModal = function() { document.getElementById('sig-modal').classList.remove('hidden'); const c = document.getElementById('sig-canvas'); const rect = c.parentElement.getBoundingClientRect(); c.width = rect.width; c.height = rect.height; const cx = c.getContext('2d'); cx.clearRect(0,0,c.width,c.height); cx.lineWidth = 3; cx.lineCap='round'; cx.strokeStyle='#000'; let painting = false; const start = (e) => { painting = true; cx.beginPath(); cx.moveTo(e.offsetX||e.touches[0].clientX-rect.left, e.offsetY||e.touches[0].clientY-rect.top); }; const move = (e) => { if(!painting) return; e.preventDefault(); cx.lineTo(e.offsetX||e.touches[0].clientX-rect.left, e.offsetY||e.touches[0].clientY-rect.top); cx.stroke(); }; const end = () => { painting = false; }; c.onmousedown=start; c.onmousemove=move; c.onmouseup=end; c.ontouchstart=start; c.ontouchmove=move; c.ontouchend=end; };
-        window.clearSig = function() { const c = document.getElementById('sig-canvas'); c.getContext('2d').clearRect(0,0,c.width,c.height); };
-        window.saveSig = function() { const data = document.getElementById('sig-canvas').toDataURL(); savedSignatures.push(data); localStorage.setItem('omni_signatures', JSON.stringify(savedSignatures)); document.getElementById('sig-modal').classList.add('hidden'); renderSignatures(); setLeftTab('sigs'); toggleSidebar('left', true); };
-        window.deleteSig = function(index) { savedSignatures.splice(index, 1); localStorage.setItem('omni_signatures', JSON.stringify(savedSignatures)); renderSignatures(); };
-        window.addSignatureToCanvas = function(url) { const img = new Image(); img.src = url; img.onload = () => { const aspectRatio = img.width / img.height; addElement({ type: 'image', subtype: 'signature', content: url, width: 150, height: 150 / aspectRatio, aspectRatio: aspectRatio }); }; };
-        window.triggerImageUpload = function() { document.getElementById('img-upload').click(); };
 
-        // Listeners & Init
-        initIcons();
-        document.querySelectorAll('#props-content input').forEach(i => i.addEventListener('change', () => addToHistory()));
-        document.getElementById('page-bg-color').addEventListener('change', () => addToHistory());
-        overlay.addEventListener('mousedown', startDraw); overlay.addEventListener('mousemove', draw); overlay.addEventListener('mouseup', endDraw); overlay.addEventListener('mouseleave', endDraw);
-        overlay.addEventListener('touchstart', startDraw); overlay.addEventListener('touchmove', draw); overlay.addEventListener('touchend', endDraw);
-        pdfTextLayer.addEventListener('mousedown', handlePdfTextPointerDown);
-        pdfTextLayer.addEventListener('touchstart', handlePdfTextPointerDown, {passive:false});
-        new ResizeObserver(() => { if(state.currentViewport && !isPanning && !isDrawing) resetView(); }).observe(document.getElementById('workspace'));
-        // --- PAN & ZOOM (PC + Mobile) ---
-        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-        function getWorkspacePoint(clientX, clientY) {
-            const rect = workspace.getBoundingClientRect();
-            return { x: clientX - rect.left, y: clientY - rect.top };
-        }
-
-        workspace.addEventListener('wheel', (e) => {
-            // Trackpad pinch often sets ctrlKey on Chromium; respect Ctrl/Meta or explicit gestures
-            const shouldZoom = e.ctrlKey || e.metaKey || !e.shiftKey;
-            if (shouldZoom) {
-                e.preventDefault();
-                const delta = e.deltaY;
-                const pt = getWorkspacePoint(e.clientX, e.clientY);
-                const wx = (pt.x - state.pan.x) / state.zoom;
-                const wy = (pt.y - state.pan.y) / state.zoom;
-                const next = clamp(state.zoom - delta * 0.001, 0.1, 5);
-                state.zoom = next;
-                state.pan.x = pt.x - wx * next;
-                state.pan.y = pt.y - wy * next;
-                updateTransform();
+            if (adapter) {
+                try { add("adapter.isFallbackAdapter", String(adapter.isFallbackAdapter)); } catch {}
+                try { add("adapter.features.size", String(adapter.features?.size ?? "?")); } catch {}
+                try { add("adapter.limits.maxBindGroups", String(adapter.limits?.maxBindGroups ?? "?")); } catch {}
             }
-        }, { passive: false });
 
-        // Mouse pan on empty space
-        workspace.addEventListener('mousedown', (e) => {
-            if (state.tool === 'draw' || state.isEditingText) return;
-            const tid = e.target && e.target.id;
-            if (['workspace', 'pan-container', 'overlay-layer', 'pdf-text-layer'].includes(tid)) {
-                isPanning = true;
-                panStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
-                workspace.style.cursor = 'grabbing';
-            }
-        });
-
-        // Touch: one-finger pan, two-finger pinch-zoom
-        workspace.addEventListener('touchstart', (e) => {
-            if (state.tool === 'draw' || state.isEditingText) return;
-            if (e.touches.length === 1) {
-                const t = e.touches[0];
-                const tid = e.target && e.target.id;
-                if (['workspace', 'pan-container', 'overlay-layer', 'pdf-text-layer'].includes(tid)) {
-                    isPanning = true;
-                    panStart = { x: t.clientX - state.pan.x, y: t.clientY - state.pan.y };
-                }
-            } else if (e.touches.length === 2) {
-                e.preventDefault();
-                isPinching = true;
-                isPanning = false;
-                const t1 = e.touches[0], t2 = e.touches[1];
-                const dx = t2.clientX - t1.clientX;
-                const dy = t2.clientY - t1.clientY;
-                pinchStartDist = Math.hypot(dx, dy) || 1;
-                pinchStartZoom = state.zoom;
-                const midX = (t1.clientX + t2.clientX) / 2;
-                const midY = (t1.clientY + t2.clientY) / 2;
-                const pt = getWorkspacePoint(midX, midY);
-                pinchWorld = { x: (pt.x - state.pan.x) / state.zoom, y: (pt.y - state.pan.y) / state.zoom };
-            }
-        }, { passive: false });
-
-        window.addEventListener('mousemove', (e) => {
-            if (isPanning) {
-                e.preventDefault();
-                state.pan.x = e.clientX - panStart.x;
-                state.pan.y = e.clientY - panStart.y;
-                updateTransform();
-            } else if (dragAction) {
-                e.preventDefault();
-                handleMove(e.clientX, e.clientY);
-            }
-        });
-
-        window.addEventListener('touchmove', (e) => {
-            if (isPinching && e.touches.length === 2) {
-                e.preventDefault();
-                const t1 = e.touches[0], t2 = e.touches[1];
-                const dx = t2.clientX - t1.clientX;
-                const dy = t2.clientY - t1.clientY;
-                const dist = Math.hypot(dx, dy) || 1;
-                const factor = dist / pinchStartDist;
-                const next = clamp(pinchStartZoom * factor, 0.1, 5);
-                const midX = (t1.clientX + t2.clientX) / 2;
-                const midY = (t1.clientY + t2.clientY) / 2;
-                const pt = getWorkspacePoint(midX, midY);
-                state.zoom = next;
-                state.pan.x = pt.x - pinchWorld.x * next;
-                state.pan.y = pt.y - pinchWorld.y * next;
-                updateTransform();
+            if (!adapter) {
+                add("ERROR", "requestAdapter returned null");
+                writeDiag();
+                showFatal('No Compatible GPU', 'WebGPU is present but the browser could not create an adapter. This commonly happens in in-app browsers/WebViews, with GPU acceleration disabled, or on unsupported/blacklisted drivers. Open this in full Chrome/Edge and verify at webgpureport.org.');
                 return;
             }
 
-            if (isPanning && e.touches.length === 1) {
-                e.preventDefault();
-                const t = e.touches[0];
-                state.pan.x = t.clientX - panStart.x;
-                state.pan.y = t.clientY - panStart.y;
-                updateTransform();
+            try {
+                const device = await adapter.requestDevice();
+                add("requestDevice", "ok");
+                try { device.destroy(); } catch {}
+            } catch (e) {
+                add("ERROR", "requestDevice failed");
+                add("requestDevice exception", (e && (e.message || String(e))) || "unknown");
+                writeDiag();
+                showFatal('WebGPU Device Failed', 'A GPU adapter was found but the browser failed to create a device. Try a different browser, disable battery saver, and ensure hardware acceleration is enabled.');
                 return;
             }
 
-            if (dragAction && e.touches.length >= 1) {
-                e.preventDefault();
-                handleMove(e.touches[0].clientX, e.touches[0].clientY);
-            }
-        }, { passive: false });
+            // Pick the model id only after the WebLLM bundle is loaded
+            MODEL_ID = pickDefaultModelId();
+            add("Selected MODEL_ID", MODEL_ID || "(none)");
+            writeDiag();
 
-        window.addEventListener('mouseup', () => {
-            if (dragAction) { dragAction = null; addToHistory(); }
-            isPanning = false;
-            workspace.style.cursor = 'grab';
-        });
-
-        window.addEventListener('touchend', (e) => {
-            if (dragAction) { dragAction = null; addToHistory(); }
-            const touches = (e && e.touches) ? e.touches : null;
-            if (!touches || touches.length === 0) isPanning = false;
-            if (!touches || touches.length < 2) isPinching = false;
-        }, { passive: true });
-        window.addEventListener('keydown', (e) => {
-            const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
-            const isTyping = state.isEditingText || tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
-
-            // Undo/Redo
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) redo();
-                else undo();
-                return;
-            }
-            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y')) {
-                e.preventDefault();
-                redo();
+            if (!MODEL_ID) {
+                showFatal('No Models Available', 'webllm.prebuiltAppConfig.model_list is empty. The WebLLM bundle may have failed to load.');
                 return;
             }
 
-            if (isTyping) return;
-
-            // Tool shortcuts
-            const k = e.key.toLowerCase();
-            if (k === 'v') { setTool('select'); return; }
-            if (k === 'e') { setTool('pdftext'); return; }
-            if (k === 'd') { setTool('draw'); return; }
-            if (k === 't') { addElement({type:'text', content:'Double-click or tap to edit', fontSize:24, fontFamily:'Inter', color:'#00f3ff', width:260, height:40, backgroundColor:'transparent'}); return; }
-
-            // Zoom
-            if (k === '+' || k === '=') { state.zoom = Math.min(5, state.zoom * 1.1); updateTransform(); return; }
-            if (k === '-' || k === '_') { state.zoom = Math.max(0.1, state.zoom / 1.1); updateTransform(); return; }
-            if (k === '0') { resetView(); return; }
-
-            // Nudge selected element
-            if (state.selectedId) {
-                const el = state.elements.find(x => x.id === state.selectedId);
-                if (el) {
-                    const step = e.shiftKey ? 10 : 1;
-                    if (k === 'arrowleft') { el.x -= step; renderElements(); return; }
-                    if (k === 'arrowright') { el.x += step; renderElements(); return; }
-                    if (k === 'arrowup') { el.y -= step; renderElements(); return; }
-                    if (k === 'arrowdown') { el.y += step; renderElements(); return; }
-                }
-            }
-
-            // Delete
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                const sel = state.elements.find(el => el.id === state.selectedId);
-                if (!sel || sel.type !== 'text') deleteSelected();
-            }
-        });
-
-        document.getElementById('img-upload').addEventListener('change', (e) => { if(e.target.files[0]) { const r = new FileReader(); r.onload = (evt) => { const i = new Image(); i.onload = () => { const rat = i.width/i.height; addElement({type:'image', content:evt.target.result, width:200, height:200/rat, aspectRatio:rat}); }; i.src = evt.target.result; }; r.readAsDataURL(e.target.files[0]); } });
-        document.getElementById('file-input').addEventListener('change', async (e) => { if(e.target.files[0]) { try { const b = await e.target.files[0].arrayBuffer(); await window.initApp(b); } catch(err){ alert("Load failed"); } } });
-
-        (function() {
-            let warpSpeed = 0, baseSpeed = 0.2, appMode = 'menu';
-            const starCanvas = document.getElementById('starfield'), starCtx = starCanvas.getContext('2d');
-            let stars = [], starW, starH, cx, cy;
-            function resizeStars() { starW = starCanvas.width = window.innerWidth; starH = starCanvas.height = window.innerHeight; cx = starW/2; cy = starH/2; initStars(); }
-            function initStars() { stars = []; for(let i=0; i<800; i++) stars.push({ x: Math.random()*starW-cx, y: Math.random()*starH-cy, z: Math.random()*starW, o: Math.random() }); }
-            function animateStars() {
-                if (appMode === 'menu') { starCtx.clearRect(0, 0, starW, starH); stars.forEach(s => { s.y -= baseSpeed; if(s.y < -cy) { s.y = cy; s.x = Math.random()*starW-cx; } const x = s.x+cx; const y = s.y+cy; const size = Math.max(1.5, (1-s.z/starW)*3); const op = 0.6+Math.sin(Date.now()*0.002+s.o*10)*0.4; starCtx.fillStyle = `rgba(255,255,255,${op})`; starCtx.beginPath(); starCtx.arc(x, y, size, 0, Math.PI*2); starCtx.fill(); }); }
-                else if (appMode === 'warp') { starCtx.fillStyle = 'rgba(5,5,5,0.3)'; starCtx.fillRect(0,0,starW,starH); stars.forEach(s => { s.z -= (baseSpeed+warpSpeed)*5; if(s.z <= 0) { s.z=starW; s.x=Math.random()*starW-cx; s.y=Math.random()*starH-cy; } const x = (s.x/s.z)*cx+cx; const y = (s.y/s.z)*cy+cy; if(x>0 && x<starW && y>0 && y<starH) { starCtx.beginPath(); const tx = (s.x/(s.z+warpSpeed*10))*cx+cx; const ty = (s.y/(s.z+warpSpeed*10))*cy+cy; starCtx.moveTo(tx, ty); starCtx.lineTo(x, y); starCtx.strokeStyle = '#00f3ff'; starCtx.lineWidth = (1-s.z/starW)*4; starCtx.stroke(); } }); }
-                else { starCtx.clearRect(0, 0, starW, starH); stars.forEach(s => { s.y -= baseSpeed*0.8; if(s.y < -cy) { s.y = cy; s.x = Math.random()*starW-cx; } const x = s.x+cx; const y = s.y+cy; starCtx.fillStyle = `rgba(255,255,255,0.25)`; starCtx.beginPath(); starCtx.arc(x, y, Math.max(1, (1-s.z/starW)*2), 0, Math.PI*2); starCtx.fill(); }); }
-                requestAnimationFrame(animateStars);
-            }
-            window.addEventListener('resize', resizeStars); resizeStars(); animateStars();
-            window.launchApp = function(mode) {
-                // Removed start/warp animation: launch immediately
-                appMode = 'menu';
-                warpSpeed = 0;
-                if(mode==='upload') document.getElementById('file-input').click();
-                if(mode==='create') createBlankPDF();
-            };
-            window.enterEditor = function() {
-                // Switch starfield to editor mode without an animation ramp
-                appMode = 'editor';
-                warpSpeed = 0;
-                initStars();
-            };
+            // Enable load button
+            el.loadBtn.disabled = false;
+            el.loadBtn.classList.remove('opacity-60','cursor-not-allowed');
+            el.statusText.innerText = `Ready — ${MODEL_ID}`;
         })();
 
-        function resetView() {
-            const ws = document.getElementById('workspace');
-            if(!ws || !state.currentViewport) { setTimeout(resetView, 100); return; }
-            if (ws.clientWidth === 0) return;
-            const m = 60; const sX = (ws.clientWidth - m) / state.currentViewport.width; const sY = (ws.clientHeight - m) / state.currentViewport.height;
-            state.zoom = Math.min(sX, sY, 1.2); 
-            state.pan.x = (ws.clientWidth - state.currentViewport.width * state.zoom) / 2;
-            state.pan.y = (ws.clientHeight - state.currentViewport.height * state.zoom) / 2;
-            updateTransform();
-        }
-        function updateTransform() { document.getElementById('pan-container').style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`; document.getElementById('zoom-disp').innerText = Math.round(state.zoom*100)+'%'; }
-        
-        window.loadApp = async function(b) { await window.initApp(b); };
 
-        // --- Helpers ---
-        function createId() { return 'id_' + Math.random().toString(36).slice(2, 10); }
+// 2. Load Engine
+        el.loadBtn.addEventListener('click', async () => {
+            if (!MODEL_ID) {
+                showFatal('Model Not Selected', 'Model ID was not set. Refresh and wait for diagnostics to finish.');
+                return;
+            }
+
+            el.loadBtn.classList.add('hidden');
+            el.progressBox.classList.remove('hidden');
+            el.gpuError.classList.add('hidden');
+
+            try {
+                // Quick sanity check: WebLLM primarily targets WebGPU.
+                if (!('gpu' in navigator) || !navigator.gpu) {
+                    throw new Error(
+                        "WebGPU is not available in this browser/context. " +
+                        "Use a WebGPU-capable Chrome/Edge build and verify at webgpureport.org. " +
+                        "If this page is inside an iframe, ensure WebGPU isn't blocked by permissions policy."
+                    );
+                }
+
+                const appConfig = buildAppConfig();
+
+                // Initialize engine with explicit config
+                engine = await webllm.CreateMLCEngine(
+                    MODEL_ID,
+                    {
+                        appConfig: appConfig,
+                        initProgressCallback: (report) => {
+                            const p = Math.round(report.progress * 100);
+                            el.progressBar.style.width = `${p}%`;
+                            el.progressText.innerText = `${p}%`;
+                            el.progressDetail.innerText = report.text;
+                        }
+                    }
+                );
+
+                // Transition to Chat
+                el.welcome.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => el.welcome.classList.add('hidden'), 500);
+                
+                el.input.disabled = false;
+                el.send.disabled = false;
+                el.input.focus();
+                
+                el.statusText.innerText = "Active";
+                el.statusText.classList.replace('text-slate-500', 'text-green-600');
+                el.statusDot.classList.replace('bg-slate-300', 'bg-green-500');
+                el.statusDot.classList.add('animate-pulse');
+
+            } catch (error) {
+                console.error(error);
+                el.progressBox.classList.add('hidden');
+                el.loadBtn.classList.remove('hidden');
+                alert(`Error loading model: ${error.message}\n\nMake sure you are not using a VPN or Firewall blocking GitHub.`);
+            }
+        });
+
+        // 3. Chat Logic
+        el.form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = el.input.value.trim();
+            if (!text || !engine) return;
+
+            // Add User Message
+            addMessage('user', text);
+            messages.push({ role: "user", content: text });
+            
+            el.input.value = '';
+            el.input.style.height = 'auto'; // Reset height
+            el.send.disabled = true;
+
+            // Create AI Placeholder
+            const aiId = `ai-${Date.now()}`;
+            const aiContentId = `${aiId}-content`;
+            addMessage('assistant', '', aiId);
+            
+            const aiContentDiv = document.getElementById(aiContentId);
+            const loaderDiv = document.getElementById(`${aiId}-loader`);
+
+            try {
+                const chunks = await engine.chat.completions.create({
+                    messages,
+                    stream: true,
+                    temperature: 0.7,
+                    max_gen_len: 512
+                });
+
+                let fullResponse = "";
+                let firstChunk = true;
+
+                for await (const chunk of chunks) {
+                    if (firstChunk) {
+                        loaderDiv.style.display = 'none';
+                        firstChunk = false;
+                    }
+                    const delta = chunk.choices[0]?.delta?.content || "";
+                    fullResponse += delta;
+                    aiContentDiv.innerHTML = marked.parse(fullResponse);
+                    scrollToBottom();
+                }
+
+                messages.push({ role: "assistant", content: fullResponse });
+
+            } catch (err) {
+                loaderDiv.style.display = 'none';
+                aiContentDiv.innerHTML += `<div class="text-red-500 mt-2 font-mono text-xs bg-red-50 p-2 rounded">Error: ${err.message}</div>`;
+            } finally {
+                el.send.disabled = false;
+                el.input.focus();
+            }
+        });
+
+        // Helper: Add Message to DOM
+        function addMessage(role, text, id = null) {
+            const isUser = role === 'user';
+            const div = document.createElement('div');
+            div.className = `flex gap-4 max-w-3xl mx-auto w-full message-animation ${isUser ? 'flex-row-reverse' : ''}`;
+            
+            const avatar = isUser
+                ? `<div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center flex-shrink-0 text-xs shadow-sm"><i class="fa-solid fa-user"></i></div>`
+                : `<div class="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center flex-shrink-0 text-xs shadow-sm"><i class="fa-solid fa-robot"></i></div>`;
+
+            let contentHTML;
+            
+            if (id) {
+                // AI Placeholder state
+                contentHTML = `
+                    <div id="${id}-content" class="prose prose-sm prose-slate max-w-none"></div>
+                    <div id="${id}-loader" class="flex gap-1 py-1">
+                        <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                        <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                        <div class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                    </div>
+                `;
+            } else {
+                // User text (escaped by simple text node insertion)
+                contentHTML = `<div class="whitespace-pre-wrap">${escapeHtml(text)}</div>`;
+            }
+
+            const bubbleClass = isUser 
+                ? 'bg-slate-800 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm text-sm' 
+                : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm text-sm w-full';
+
+            div.innerHTML = `
+                ${avatar}
+                <div class="${bubbleClass}">${contentHTML}</div>
+            `;
+            
+            el.chatBox.appendChild(div);
+            scrollToBottom(true);
+        }
+
+        function scrollToBottom(force = false) {
+            const isAtBottom = el.chatBox.scrollHeight - el.chatBox.scrollTop <= el.chatBox.clientHeight + 100;
+            if (force || isAtBottom) {
+                el.chatBox.scrollTo({ top: el.chatBox.scrollHeight, behavior: 'smooth' });
+            }
+        }
+
+        // Auto-resize textarea
+        el.input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
+        });
+
+        // Enter key to send
+        el.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                el.send.click();
+            }
+        });
+
+        // Basic XSS protection for user input
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
     </script>
 </body>
 </html>
