@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>AR 3D Scanner to OBJ</title>
+    <title>AR High-Detail Stream Scanner</title>
     <!-- Tailwind CSS for UI -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -21,7 +21,7 @@
         body { 
             margin: 0; 
             overflow: hidden; 
-            background-color: #111; 
+            background-color: #000; 
             color: #fff; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             touch-action: none;
@@ -34,14 +34,13 @@
             height: 100%;
             z-index: 1;
         }
-        /* The DOM overlay is placed on top of the WebXR view */
         #dom-overlay { 
             position: absolute; 
             top: 0; 
             left: 0; 
             width: 100%; 
             height: 100%; 
-            pointer-events: none; /* Let touches pass through to WebXR unless on a button */
+            pointer-events: none; 
             display: flex; 
             flex-direction: column; 
             justify-content: space-between; 
@@ -53,32 +52,40 @@
         .pointer-events-auto { pointer-events: auto; }
         .hidden { display: none !important; }
         
-        /* Custom touch optimization for buttons */
         button {
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+        }
+
+        /* Scan reticle animation */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .scanning-active #scan-indicator {
+            animation: pulse-ring 1s infinite;
         }
     </style>
 </head>
 <body>
 
     <!-- Startup / Error Screen -->
-    <div id="start-screen" class="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center z-50 p-6 text-center">
-        <div class="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+    <div id="start-screen" class="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center z-50 p-6 text-center">
+        <div class="max-w-md w-full bg-gray-900 rounded-2xl shadow-2xl p-8 border border-gray-800">
             <div class="flex justify-center mb-6">
-                <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+                <svg class="w-16 h-16 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
                 </svg>
             </div>
-            <h1 class="text-3xl font-bold mb-3 text-white tracking-tight">AR 3D Scanner</h1>
+            <h1 class="text-3xl font-bold mb-3 text-white tracking-tight">HD Stream Scanner</h1>
             <p class="text-gray-400 mb-8 text-sm leading-relaxed">
-                Scan rooms or objects in real-time using your device's camera spatial data. Generate and export a complete 3D <code>.obj</code> file directly to your device.
+                Utilizes <strong>Origin Private File System (OPFS)</strong> to stream high-density object details directly to disk in real-time. Capable of mapping massive environments without running out of memory.
             </p>
             
             <div id="ar-status-container" class="min-h-[60px]">
-                <!-- Status messages injected here -->
-                <div class="text-gray-500 animate-pulse">Initializing WebXR Engine...</div>
+                <div class="text-gray-600 animate-pulse">Initializing Storage & WebXR...</div>
             </div>
         </div>
     </div>
@@ -88,12 +95,23 @@
 
     <!-- AR Interface (DOM Overlay) -->
     <div id="dom-overlay" class="hidden">
-        <!-- Top Header -->
+        <!-- Top Header: Stats -->
         <div class="flex justify-between items-start pointer-events-auto">
-            <div class="bg-black/60 backdrop-blur-md px-5 py-3 rounded-xl border border-white/10 shadow-lg">
-                <span class="text-xs text-gray-400 uppercase tracking-wider font-semibold block mb-1">Voxels Mapped</span>
-                <div id="point-count" class="text-3xl font-mono font-bold text-blue-400 leading-none">0</div>
+            <div class="flex flex-col gap-2">
+                <div class="bg-black/80 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-800 shadow-lg flex items-center justify-between min-w-[140px]">
+                    <span class="text-xs text-green-400 uppercase tracking-wider font-semibold">Planes</span>
+                    <div id="plane-count" class="text-xl font-mono font-bold text-white">0</div>
+                </div>
+                <div class="bg-black/80 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-800 shadow-lg flex items-center justify-between min-w-[140px]">
+                    <span class="text-xs text-purple-400 uppercase tracking-wider font-semibold">Voxels</span>
+                    <div id="point-count" class="text-xl font-mono font-bold text-white">0</div>
+                </div>
+                <div class="bg-black/80 backdrop-blur-md px-4 py-2 rounded-xl border border-gray-800 shadow-lg flex items-center justify-between min-w-[140px]">
+                    <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Stream Size</span>
+                    <div id="stream-size" class="text-sm font-mono text-gray-300">0 KB</div>
+                </div>
             </div>
+            
             <button id="btn-exit" class="bg-red-500/80 hover:bg-red-500 text-white p-4 rounded-full shadow-lg backdrop-blur-md transition-all active:scale-90">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
@@ -101,13 +119,13 @@
         
         <!-- Bottom Controls -->
         <div class="flex flex-col items-center gap-4 pointer-events-auto w-full max-w-md mx-auto relative">
-             <button id="btn-scan" class="w-full bg-white text-black font-bold py-5 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.2)] active:bg-gray-200 active:scale-[0.98] transition-all text-xl flex items-center justify-center gap-3 relative overflow-hidden">
-                <div class="w-4 h-4 bg-red-500 rounded-full animate-pulse hidden" id="scan-indicator"></div>
-                <span id="scan-text">Hold to Scan Surface</span>
+             <button id="btn-scan" class="w-full bg-white text-black font-bold py-5 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.1)] active:bg-gray-200 active:scale-[0.98] transition-all text-xl flex items-center justify-center gap-3 relative overflow-hidden">
+                <div class="w-4 h-4 bg-purple-600 rounded-full hidden" id="scan-indicator"></div>
+                <span id="scan-text">Hold to Stream Details</span>
             </button>
-            <button id="btn-export" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg backdrop-blur-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-blue-400/30">
+            <button id="btn-export" class="w-full bg-purple-700 hover:bg-purple-600 text-white font-bold py-4 rounded-xl shadow-lg backdrop-blur-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-purple-500/30">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Export Mesh to .OBJ
+                Compile & Export
             </button>
         </div>
     </div>
@@ -126,100 +144,164 @@
         const btnScan = document.getElementById('btn-scan');
         const btnExport = document.getElementById('btn-export');
         const pointCountEl = document.getElementById('point-count');
+        const planeCountEl = document.getElementById('plane-count');
+        const streamSizeEl = document.getElementById('stream-size');
         const scanIndicator = document.getElementById('scan-indicator');
         const scanText = document.getElementById('scan-text');
 
         // --- Core Three.js Variables ---
         let scene, camera, renderer;
         let reticle;
-        let scanGroup;
+        let planeGroup;
         
+        // --- High-Density Instanced Rendering ---
+        const MAX_INSTANCES_PER_CHUNK = 10000;
+        let instancedMeshes = [];
+        let currentInstancedMesh = null;
+        let currentInstanceCount = 0;
+        const dummyMatrix = new THREE.Matrix4();
+        
+        // Smaller voxels for higher detail streaming (1cm)
+        const VOXEL_SIZE = 0.01;
+        const voxelGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+        const voxelMat = new THREE.MeshStandardMaterial({ 
+            color: 0x9333ea, // Purple
+            roughness: 0.6, 
+            metalness: 0.2 
+        });
+
+        // Cache base vertices of the voxel for fast OBJ translation
+        const voxelBaseVertices = [];
+        const posAttr = voxelGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            voxelBaseVertices.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
+        }
+        
+        // Use a generic index array for a standard box geometry to construct OBJ faces
+        // Three.js BoxGeometry has 24 vertices (4 per face, 6 faces)
+        const faceIndices = [];
+        const indexAttr = voxelGeo.getIndex();
+        for (let i = 0; i < indexAttr.count; i+=3) {
+            faceIndices.push([indexAttr.getX(i), indexAttr.getX(i+1), indexAttr.getX(i+2)]);
+        }
+
         // --- WebXR Variables ---
         let xrSession = null;
         let hitTestSource = null;
         let hitTestSourceRequested = false;
+        const planeMap = new Map(); 
 
-        // --- Scanning Logic Variables ---
+        // --- Scanning & Streaming Variables ---
         let isScanning = false;
         let pointCount = 0;
         let lastPointPos = new THREE.Vector3(9999, 9999, 9999);
-        const MIN_DISTANCE_M = 0.015; // Minimum distance between mapped voxels (1.5 cm)
+        const MIN_DISTANCE_M = 0.008; // 8mm resolution threshold
+
+        // OPFS State
+        let streamFileHandle = null;
+        let streamWritable = null;
+        let globalVertexOffset = 0; // Tracks OBJ vertices to ensure faces map correctly
+        let totalBytesWritten = 0;
         
-        // Voxel template (A small cube placed at mapped points to form physical geometry for the OBJ)
-        const voxelGeo = new THREE.BoxGeometry(0.015, 0.015, 0.015);
-        const voxelMat = new THREE.MeshStandardMaterial({ 
-            color: 0x44aaff, 
-            roughness: 0.7, 
-            metalness: 0.1 
-        });
+        let chunkQueue = [];
+        let isFlushing = false;
+        let hasFileSystemSupport = false;
 
         init();
 
-        function init() {
-            // 1. Setup Scene
-            scene = new THREE.Scene();
+        async function init() {
+            // 1. Initialize OPFS Streaming Storage
+            await initStorage();
 
-            // 2. Setup Camera
+            // 2. Setup Three.js Engine
+            scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-            // 3. Setup Lights (Crucial for voxel visibility)
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-            light.position.set(0.5, 1, 0.25);
+            const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+            light.position.set(0, 2, 0);
             scene.add(light);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            directionalLight.position.set(1, 2, 0);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 2, 1);
             scene.add(directionalLight);
 
-            // 4. Setup Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             webxrCanvasContainer.appendChild(renderer.domElement);
 
-            // 5. Setup Scanning Reticle
             reticle = new THREE.Mesh(
-                new THREE.RingGeometry(0.02, 0.025, 32).rotateX(-Math.PI / 2),
-                new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+                new THREE.RingGeometry(0.015, 0.02, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial({ color: 0xa855f7 })
             );
             reticle.matrixAutoUpdate = false;
             reticle.visible = false;
             scene.add(reticle);
 
-            // 6. Setup Container for Scanned Voxels
-            scanGroup = new THREE.Group();
-            scene.add(scanGroup);
-
-            // 7. Initialize WebXR Check
-            checkXRAvailability();
+            planeGroup = new THREE.Group();
+            scene.add(planeGroup);
             
-            // Handle Window Resize
-            window.addEventListener('resize', onWindowResize, false);
+            // Initialize first instance chunk
+            createNewInstancedChunk();
 
-            // 8. Setup Interaction Events
+            checkXRAvailability();
+            window.addEventListener('resize', onWindowResize, false);
             setupEvents();
+        }
+
+        async function initStorage() {
+            try {
+                if (navigator.storage && navigator.storage.getDirectory) {
+                    const rootDir = await navigator.storage.getDirectory();
+                    // Generate unique filename for this session
+                    const fileName = `stream_scan_${Date.now()}.obj`;
+                    streamFileHandle = await rootDir.getFileHandle(fileName, { create: true });
+                    streamWritable = await streamFileHandle.createWritable();
+                    
+                    // Write OBJ Header
+                    const header = `# AR HD Stream Scanner\no Streamed_Details\n`;
+                    await streamWritable.write(header);
+                    totalBytesWritten += header.length;
+                    
+                    hasFileSystemSupport = true;
+                    console.log("OPFS Streaming initialized successfully.");
+                } else {
+                    throw new Error("OPFS not supported.");
+                }
+            } catch (err) {
+                console.warn("Direct file streaming unavailable. Falling back to RAM buffering.", err);
+                hasFileSystemSupport = false;
+                // Fallback will just keep chunks in memory (array)
+            }
+        }
+
+        function createNewInstancedChunk() {
+            currentInstancedMesh = new THREE.InstancedMesh(voxelGeo, voxelMat, MAX_INSTANCES_PER_CHUNK);
+            currentInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            // Hide all instances initially
+            currentInstancedMesh.count = 0; 
+            scene.add(currentInstancedMesh);
+            instancedMeshes.push(currentInstancedMesh);
+            currentInstanceCount = 0;
         }
 
         function checkXRAvailability() {
             if ('xr' in navigator) {
                 navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
                     if (supported) {
-                        // Create Start Button
                         arStatusContainer.innerHTML = '';
                         const btnEnterAR = document.createElement('button');
-                        btnEnterAR.className = 'w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-transform transform active:scale-[0.98] text-lg tracking-wide';
-                        btnEnterAR.innerText = 'Start AR Scanner';
+                        btnEnterAR.className = 'w-full bg-purple-700 hover:bg-purple-600 text-white font-bold py-4 px-8 rounded-xl shadow-[0_0_20px_rgba(147,51,234,0.4)] transition-transform transform active:scale-[0.98] text-lg tracking-wide';
+                        btnEnterAR.innerText = 'Launch HD Scanner';
                         btnEnterAR.onclick = onRequestSession;
                         arStatusContainer.appendChild(btnEnterAR);
                     } else {
-                        showError("WebXR 'immersive-ar' is not supported on this device/browser combination.");
+                        showError("WebXR 'immersive-ar' is not supported on this device.");
                     }
-                }).catch(err => {
-                    showError(`WebXR check failed: ${err.message}`);
-                });
+                }).catch(err => showError(`WebXR check failed: ${err.message}`));
             } else {
-                showError("WebXR API is completely missing. Please use a compatible browser (e.g., Chrome for Android).");
+                showError("WebXR API is completely missing. Please use a compatible browser.");
             }
         }
 
@@ -228,10 +310,9 @@
         }
 
         async function onRequestSession() {
-            // Request the WebXR session with necessary AR features
             const sessionInit = {
                 requiredFeatures: ['hit-test', 'local'],
-                optionalFeatures: ['dom-overlay'],
+                optionalFeatures: ['dom-overlay', 'planes'],
                 domOverlay: { root: document.getElementById('dom-overlay') }
             };
 
@@ -239,17 +320,13 @@
                 xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
                 xrSession.addEventListener('end', onSessionEnded);
                 
-                // Set the session into the renderer
                 renderer.xr.setReferenceSpaceType('local');
                 await renderer.xr.setSession(xrSession);
                 
-                // Update UI state
                 startScreen.classList.add('hidden');
                 domOverlay.classList.remove('hidden');
                 
-                // Start Render Loop
                 renderer.setAnimationLoop(render);
-                
             } catch (err) {
                 showError(`Failed to start AR Session: ${err.message}`);
             }
@@ -261,45 +338,38 @@
             hitTestSourceRequested = false;
             hitTestSource = null;
             
-            // Stop loop and restore UI
             renderer.setAnimationLoop(null);
             startScreen.classList.remove('hidden');
             domOverlay.classList.add('hidden');
-            
-            // Do not clear the scan group here, so they can export even if they crash out of AR.
         }
 
         function setupEvents() {
-            // Exit Button
-            btnExit.addEventListener('click', () => {
-                if (xrSession) xrSession.end();
-            });
+            btnExit.addEventListener('click', () => { if (xrSession) xrSession.end(); });
 
-            // Scan Button (Press and Hold)
             const startScanning = (e) => {
-                e.preventDefault(); // Prevent standard touch/mouse behavior
+                e.preventDefault();
                 isScanning = true;
                 scanIndicator.classList.remove('hidden');
-                scanText.innerText = "Mapping Surface...";
-                btnScan.classList.replace('bg-white', 'bg-gray-100');
+                scanText.innerText = "Streaming Details...";
+                btnScan.classList.add('bg-gray-100');
+                btnScan.classList.add('scanning-active');
             };
 
             const stopScanning = (e) => {
                 e.preventDefault();
                 isScanning = false;
                 scanIndicator.classList.add('hidden');
-                scanText.innerText = "Hold to Scan Surface";
-                btnScan.classList.replace('bg-gray-100', 'bg-white');
+                scanText.innerText = "Hold to Stream Details";
+                btnScan.classList.remove('bg-gray-100');
+                btnScan.classList.remove('scanning-active');
             };
 
-            // Use Pointer Events for unified touch/mouse handling within the DOM Overlay
             btnScan.addEventListener('pointerdown', startScanning);
             btnScan.addEventListener('pointerup', stopScanning);
             btnScan.addEventListener('pointerleave', stopScanning);
             btnScan.addEventListener('pointercancel', stopScanning);
 
-            // Export Button
-            btnExport.addEventListener('click', exportToOBJ);
+            btnExport.addEventListener('click', exportHybridScene);
         }
 
         function render(timestamp, frame) {
@@ -307,27 +377,28 @@
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
 
-                // 1. Manage Hit Test Source Setup
+                // 1. Process Architectural Planes
+                if (frame.detectedPlanes) {
+                    processDetectedPlanes(frame.detectedPlanes, frame, referenceSpace);
+                }
+
+                // 2. Setup Hit Test
                 if (hitTestSourceRequested === false) {
                     session.requestReferenceSpace('viewer').then((viewerSpace) => {
                         session.requestHitTestSource({ space: viewerSpace }).then((source) => {
                             hitTestSource = source;
                         });
                     });
-                    
-                    // Reset if session ends unexpectedly
                     session.addEventListener('end', () => {
                         hitTestSourceRequested = false;
                         hitTestSource = null;
                     });
-                    
                     hitTestSourceRequested = true;
                 }
 
-                // 2. Perform Hit Test
+                // 3. Process Hit Test and Stream
                 if (hitTestSource) {
                     const hitTestResults = frame.getHitTestResults(hitTestSource);
-
                     if (hitTestResults.length > 0) {
                         const hit = hitTestResults[0];
                         const pose = hit.getPose(referenceSpace);
@@ -335,84 +406,259 @@
                         reticle.visible = true;
                         reticle.matrix.fromArray(pose.transform.matrix);
                         
-                        // 3. Process Spatial Scanning
-                        if (isScanning) {
-                            placeVoxelAtReticle();
-                        }
-                        
+                        if (isScanning) streamVoxelAtReticle();
                     } else {
                         reticle.visible = false;
                     }
                 }
             }
 
-            // Render the scene
             renderer.render(scene, camera);
         }
 
-        function placeVoxelAtReticle() {
-            // Extract current position from the reticle's matrix
+        function processDetectedPlanes(detectedPlanes, frame, referenceSpace) {
+            for (const [xrPlane, meshData] of planeMap.entries()) {
+                if (!detectedPlanes.has(xrPlane)) {
+                    planeGroup.remove(meshData.mesh);
+                    meshData.mesh.geometry.dispose();
+                    planeMap.delete(xrPlane);
+                }
+            }
+
+            detectedPlanes.forEach(xrPlane => {
+                const pose = frame.getPose(xrPlane.planeSpace, referenceSpace);
+                if (!pose) return;
+
+                let meshData = planeMap.get(xrPlane);
+                
+                if (!meshData || meshData.lastChangedTime < xrPlane.lastChangedTime) {
+                    const polygon = xrPlane.polygon;
+                    const shape = new THREE.Shape();
+                    
+                    for (let i = 0; i < polygon.length; i++) {
+                        if (i === 0) shape.moveTo(polygon[i].x, polygon[i].z);
+                        else shape.lineTo(polygon[i].x, polygon[i].z);
+                    }
+                    
+                    const geometry = new THREE.ShapeGeometry(shape);
+                    geometry.rotateX(-Math.PI / 2);
+
+                    if (meshData) {
+                        meshData.mesh.geometry.dispose();
+                        meshData.mesh.geometry = geometry;
+                        meshData.lastChangedTime = xrPlane.lastChangedTime;
+                    } else {
+                        const isVertical = xrPlane.orientation === 'vertical';
+                        const color = isVertical ? 0x22c55e : 0x3b82f6; 
+                        
+                        const material = new THREE.MeshStandardMaterial({ 
+                            color: color, 
+                            transparent: true, 
+                            opacity: 0.3,
+                            side: THREE.DoubleSide,
+                            roughness: 0.9
+                        });
+                        
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.matrixAutoUpdate = false;
+                        planeGroup.add(mesh);
+                        
+                        meshData = { mesh: mesh, lastChangedTime: xrPlane.lastChangedTime };
+                        planeMap.set(xrPlane, meshData);
+                    }
+                }
+                
+                meshData.mesh.matrix.fromArray(pose.transform.matrix);
+            });
+
+            planeCountEl.innerText = planeMap.size;
+        }
+
+        function streamVoxelAtReticle() {
             const currentPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
             
-            // Throttle voxel placement based on spatial distance to prevent memory overflow
             if (currentPos.distanceTo(lastPointPos) > MIN_DISTANCE_M) {
-                // Clone geometry/material reference to keep memory footprint low
-                const voxel = new THREE.Mesh(voxelGeo, voxelMat);
                 
-                // Apply spatial transform
-                voxel.position.copy(currentPos);
-                voxel.quaternion.setFromRotationMatrix(reticle.matrix);
+                // 1. Update Visualizer (InstancedMesh)
+                if (currentInstanceCount >= MAX_INSTANCES_PER_CHUNK) {
+                    createNewInstancedChunk();
+                }
                 
-                // Add to export group
-                scanGroup.add(voxel);
+                // Set matrix for the current instance
+                currentInstancedMesh.setMatrixAt(currentInstanceCount, reticle.matrix);
+                currentInstanceCount++;
+                currentInstancedMesh.count = currentInstanceCount; // Only render up to filled instances
+                currentInstancedMesh.instanceMatrix.needsUpdate = true;
                 
-                // Update trackers
+                // 2. Generate Raw OBJ Data for Streaming
+                generateOBJChunk(reticle.matrix);
+                
+                // 3. Update State Tracker
                 lastPointPos.copy(currentPos);
                 pointCount++;
-                pointCountEl.innerText = pointCount;
+                
+                // Avoid DOM update spam, update roughly every 10 points
+                if(pointCount % 5 === 0) {
+                    pointCountEl.innerText = pointCount;
+                }
             }
         }
 
-        function exportToOBJ() {
-            if (pointCount === 0) {
-                alert("No points scanned yet. Scan a surface first.");
+        function generateOBJChunk(matrix) {
+            let chunk = "";
+            const vertexCount = voxelBaseVertices.length;
+            
+            // Calculate and append world-space vertices
+            for(let i = 0; i < vertexCount; i++) {
+                const v = voxelBaseVertices[i].clone().applyMatrix4(matrix);
+                chunk += `v ${v.x.toFixed(5)} ${v.y.toFixed(5)} ${v.z.toFixed(5)}\n`;
+            }
+            
+            // Append faces (adjusted by global offset)
+            // OBJ indices are 1-based, so we add 1 + globalVertexOffset
+            const offset = globalVertexOffset + 1;
+            for(let i = 0; i < faceIndices.length; i++) {
+                const face = faceIndices[i];
+                // Three.js index array might be winding order specific, OBJ requires correct winding for normals
+                chunk += `f ${face[0] + offset} ${face[1] + offset} ${face[2] + offset}\n`;
+            }
+            
+            globalVertexOffset += vertexCount;
+            
+            // Queue chunk for async writing
+            chunkQueue.push(chunk);
+            flushStreamQueue();
+        }
+
+        async function flushStreamQueue() {
+            if (isFlushing || chunkQueue.length === 0) return;
+            isFlushing = true;
+            
+            // Batch process current queue
+            const dataToStream = chunkQueue.join('');
+            chunkQueue = []; // Clear for next frames
+            
+            totalBytesWritten += dataToStream.length;
+            
+            // Update UI size (rough KB estimation based on string length)
+            streamSizeEl.innerText = (totalBytesWritten / 1024).toFixed(1) + ' KB';
+
+            if (hasFileSystemSupport && streamWritable) {
+                try {
+                    await streamWritable.write(dataToStream);
+                } catch (err) {
+                    console.error("OPFS Write Error", err);
+                }
+            } else {
+                // RAM Fallback: Push it back into a persistent array
+                // Overriding local queue variable for RAM buffering
+                if (!window.ramBuffer) window.ramBuffer = [];
+                window.ramBuffer.push(dataToStream);
+            }
+            
+            isFlushing = false;
+            
+            // If more items came in while writing, flush again
+            if (chunkQueue.length > 0) flushStreamQueue();
+        }
+
+        async function exportHybridScene() {
+            if (planeMap.size === 0 && pointCount === 0) {
+                alert("Nothing mapped yet.");
                 return;
             }
 
-            // Temporarily change button state to show processing
             const originalText = btnExport.innerHTML;
-            btnExport.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating Mesh...`;
+            btnExport.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Compiling...`;
             
-            // Defer execution slightly to allow UI to update
-            setTimeout(() => {
-                try {
-                    // Three.js OBJExporter parses the group and calculates absolute transforms
-                    const exporter = new OBJExporter();
-                    const resultData = exporter.parse(scanGroup);
-
-                    // Create binary blob from string payload
-                    const blob = new Blob([resultData], { type: 'text/plain' });
-                    const blobUrl = URL.createObjectURL(blob);
-
-                    // Trigger Client-Side Download
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = blobUrl;
-                    a.download = `ar_scan_${new Date().getTime()}.obj`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    // Cleanup
-                    document.body.removeChild(a);
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-                    
-                } catch (error) {
-                    console.error("Export Failed:", error);
-                    alert("Error exporting mesh.");
-                } finally {
-                    btnExport.innerHTML = originalText;
+            try {
+                // Ensure any pending streams are flushed
+                while (isFlushing || chunkQueue.length > 0) {
+                    await new Promise(r => setTimeout(r, 100));
                 }
-            }, 50);
+
+                // 1. Export RAM-based Room Planes using Three.js Exporter
+                let planesOBJ = "";
+                if (planeGroup.children.length > 0) {
+                    const exporter = new OBJExporter();
+                    
+                    // We need to offset the exporter's internal vertex count so it doesn't 
+                    // clash with our streamed voxel vertex count.
+                    // A trick is to append the exporter's result, but since we are appending, 
+                    // we need to adjust the faces of the planes.
+                    
+                    // To do this reliably without hacking the exporter:
+                    // Create a dummy scene, export planes, then manually regex/shift the face indices 
+                    // by `globalVertexOffset`.
+                    
+                    const tempGroup = new THREE.Group();
+                    planeGroup.children.forEach(mesh => {
+                        const clone = mesh.clone();
+                        clone.applyMatrix4(mesh.matrix);
+                        clone.matrix.identity();
+                        clone.position.set(0,0,0);
+                        clone.rotation.set(0,0,0);
+                        clone.scale.set(1,1,1);
+                        tempGroup.add(clone);
+                    });
+                    
+                    const rawPlanesOBJ = exporter.parse(tempGroup);
+                    
+                    // Shift the 'f ' indices in rawPlanesOBJ by globalVertexOffset
+                    const lines = rawPlanesOBJ.split('\n');
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].startsWith('f ')) {
+                            const parts = lines[i].trim().split(/\s+/);
+                            // Process face parts e.g. f 1/1/1 2/2/2 3/3/3
+                            for (let j = 1; j < parts.length; j++) {
+                                const subParts = parts[j].split('/');
+                                subParts[0] = (parseInt(subParts[0]) + globalVertexOffset).toString();
+                                parts[j] = subParts.join('/');
+                            }
+                            lines[i] = parts.join(' ');
+                        }
+                    }
+                    planesOBJ = "\no Room_Planes\n" + lines.join('\n');
+                }
+
+                // 2. Finalize File Streaming
+                let finalBlobUrl;
+                if (hasFileSystemSupport && streamWritable) {
+                    // Write planes to the end of the file
+                    if (planesOBJ) await streamWritable.write(planesOBJ);
+                    await streamWritable.close();
+                    streamWritable = null; // Prevent further writes
+
+                    const file = await streamFileHandle.getFile();
+                    finalBlobUrl = URL.createObjectURL(file);
+                } else {
+                    // RAM Fallback Compiler
+                    const ramData = (window.ramBuffer ? window.ramBuffer.join('') : "") + planesOBJ;
+                    const blob = new Blob([ramData], { type: 'text/plain' });
+                    finalBlobUrl = URL.createObjectURL(blob);
+                }
+
+                // 3. Trigger Download
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = finalBlobUrl;
+                a.download = `hd_room_scan_${new Date().getTime()}.obj`;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(finalBlobUrl), 100);
+                
+                // Reset session storage if user wants to scan more (optional)
+                // For safety, let's keep them in the current state unless they refresh.
+
+            } catch (error) {
+                console.error("Compilation Failed:", error);
+                alert("Error compiling mesh. File might be too large or disk is full.");
+            } finally {
+                btnExport.innerHTML = originalText;
+            }
         }
 
         function onWindowResize() {
