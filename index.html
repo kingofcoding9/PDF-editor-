@@ -1,366 +1,428 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web NFC Hub | Read & Write Tags</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>AR 3D Scanner to OBJ</title>
+    <!-- Tailwind CSS for UI -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        /* Custom scrollbar for the console output */
-        .console-scroll::-webkit-scrollbar {
-            width: 8px;
+    
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
         }
-        .console-scroll::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-        .console-scroll::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-        .console-scroll::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
-        }
-        
-        .pulse-animation {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
+      }
+    </script>
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: .7; transform: scale(1.05); }
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #111; 
+            color: #fff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            touch-action: none;
+        }
+        #webxr-canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        /* The DOM overlay is placed on top of the WebXR view */
+        #dom-overlay { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; /* Let touches pass through to WebXR unless on a button */
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            padding: 20px; 
+            padding-bottom: 40px;
+            box-sizing: border-box; 
+            z-index: 10; 
+        }
+        .pointer-events-auto { pointer-events: auto; }
+        .hidden { display: none !important; }
+        
+        /* Custom touch optimization for buttons */
+        button {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans text-gray-800">
+<body>
 
-    <!-- Header -->
-    <header class="bg-blue-600 text-white shadow-md">
-        <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 class="text-2xl font-bold flex items-center gap-2">
-                <i class="fa-solid fa-wifi rotate-90"></i> Web NFC Hub
-            </h1>
-            <div id="statusBadge" class="px-3 py-1 rounded-full text-sm font-semibold bg-gray-500 text-white">
-                Checking Support...
+    <!-- Startup / Error Screen -->
+    <div id="start-screen" class="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center z-50 p-6 text-center">
+        <div class="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+            <div class="flex justify-center mb-6">
+                <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold mb-3 text-white tracking-tight">AR 3D Scanner</h1>
+            <p class="text-gray-400 mb-8 text-sm leading-relaxed">
+                Scan rooms or objects in real-time using your device's camera spatial data. Generate and export a complete 3D <code>.obj</code> file directly to your device.
+            </p>
+            
+            <div id="ar-status-container" class="min-h-[60px]">
+                <!-- Status messages injected here -->
+                <div class="text-gray-500 animate-pulse">Initializing WebXR Engine...</div>
             </div>
         </div>
-    </header>
+    </div>
 
-    <!-- Main Content -->
-    <main class="max-w-4xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- WebXR Canvas Container -->
+    <div id="webxr-canvas-container"></div>
 
-        <!-- Controls Column -->
-        <div class="space-y-6">
-            
-            <!-- Compatibility Warning (Hidden by default) -->
-            <div id="unsupportedWarning" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm">
-                <p class="font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Device Not Supported</p>
-                <p class="text-sm mt-1">
-                    Your current device or browser does not support the Web NFC API. 
-                    Currently, Web NFC requires <strong>Chrome on Android</strong>. iOS and Desktop browsers (Windows/Mac) block direct hardware NFC access from web pages.
-                </p>
+    <!-- AR Interface (DOM Overlay) -->
+    <div id="dom-overlay" class="hidden">
+        <!-- Top Header -->
+        <div class="flex justify-between items-start pointer-events-auto">
+            <div class="bg-black/60 backdrop-blur-md px-5 py-3 rounded-xl border border-white/10 shadow-lg">
+                <span class="text-xs text-gray-400 uppercase tracking-wider font-semibold block mb-1">Voxels Mapped</span>
+                <div id="point-count" class="text-3xl font-mono font-bold text-blue-400 leading-none">0</div>
             </div>
-
-            <!-- Mode Selector / Actions -->
-            <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                <h2 class="text-xl font-bold mb-4 border-b pb-2">Actions</h2>
-                
-                <!-- Read Section -->
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Read NFC Tag</h3>
-                    <p class="text-sm text-gray-500 mb-3">Scan an NDEF formatted tag to read its contents and serial number.</p>
-                    <button id="btnRead" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition flex justify-center items-center gap-2">
-                        <i class="fa-solid fa-book-open"></i> Start Scanning
-                    </button>
-                </div>
-
-                <!-- Write Section -->
-                <div class="pt-4 border-t">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Write to NFC Tag</h3>
-                    <p class="text-sm text-gray-500 mb-3">Encode data onto a writable NDEF tag.</p>
-                    
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Record Type</label>
-                            <select id="writeType" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-                                <option value="text">Text Record</option>
-                                <option value="url">URL / Web Link</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Payload Data</label>
-                            <textarea id="writeData" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border" placeholder="Enter text or URL (e.g., https://example.com)"></textarea>
-                        </div>
-                        <button id="btnWrite" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition flex justify-center items-center gap-2">
-                            <i class="fa-solid fa-pen-to-square"></i> Prepare to Write
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Stop Action -->
-                <div class="pt-6">
-                    <button id="btnStop" class="hidden w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition flex justify-center items-center gap-2">
-                        <i class="fa-solid fa-stop"></i> Stop Current Operation
-                    </button>
-                </div>
-            </div>
+            <button id="btn-exit" class="bg-red-500/80 hover:bg-red-500 text-white p-4 rounded-full shadow-lg backdrop-blur-md transition-all active:scale-90">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
         </div>
-
-        <!-- Output Console Column -->
-        <div class="bg-gray-900 rounded-lg shadow-md border border-gray-700 flex flex-col h-[600px]">
-            <div class="bg-gray-800 px-4 py-2 border-b border-gray-700 rounded-t-lg flex justify-between items-center">
-                <span class="text-gray-300 font-mono text-sm"><i class="fa-solid fa-terminal"></i> Terminal Output</span>
-                <button id="btnClear" class="text-gray-400 hover:text-white text-sm"><i class="fa-solid fa-trash"></i> Clear</button>
-            </div>
-            
-            <div id="activeState" class="hidden bg-blue-900 text-blue-200 p-3 text-center text-sm font-semibold border-b border-blue-800">
-                <i class="fa-solid fa-mobile-screen pulse-animation"></i> <span id="activeStateText">Waiting for tag tap...</span>
-            </div>
-
-            <div id="consoleOutput" class="p-4 flex-1 overflow-y-auto console-scroll font-mono text-sm text-green-400 space-y-2">
-                <div class="text-gray-500">System initialized. Awaiting commands...</div>
-            </div>
-        </div>
-
-    </main>
-
-    <script>
-        // DOM Elements
-        const statusBadge = document.getElementById('statusBadge');
-        const unsupportedWarning = document.getElementById('unsupportedWarning');
-        const btnRead = document.getElementById('btnRead');
-        const btnWrite = document.getElementById('btnWrite');
-        const btnStop = document.getElementById('btnStop');
-        const writeType = document.getElementById('writeType');
-        const writeData = document.getElementById('writeData');
-        const consoleOutput = document.getElementById('consoleOutput');
-        const btnClear = document.getElementById('btnClear');
-        const activeState = document.getElementById('activeState');
-        const activeStateText = document.getElementById('activeStateText');
-
-        // Global State
-        let isNfcSupported = false;
-        let abortController = null;
-
-        // Logging Function
-        function log(message, type = 'info') {
-            const time = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            
-            let colorClass = 'text-green-400'; // default info
-            if (type === 'error') colorClass = 'text-red-400';
-            if (type === 'success') colorClass = 'text-blue-300';
-            if (type === 'warning') colorClass = 'text-yellow-400';
-            if (type === 'data') colorClass = 'text-purple-300 bg-gray-800 p-2 rounded mt-1 mb-2';
-
-            entry.className = colorClass;
-            
-            if (type === 'data') {
-                entry.innerHTML = message; // Allow HTML formatting for structured data
-            } else {
-                entry.textContent = `[${time}] ${message}`;
-            }
-
-            consoleOutput.appendChild(entry);
-            consoleOutput.scrollTop = consoleOutput.scrollHeight;
-        }
-
-        // Initialize and Check Support
-        function init() {
-            if ('NDEFReader' in window) {
-                isNfcSupported = true;
-                statusBadge.textContent = "Supported";
-                statusBadge.className = "px-3 py-1 rounded-full text-sm font-semibold bg-green-500 text-white";
-                log("Web NFC API detected and available.", "success");
-            } else {
-                statusBadge.textContent = "Unsupported";
-                statusBadge.className = "px-3 py-1 rounded-full text-sm font-semibold bg-red-500 text-white";
-                unsupportedWarning.classList.remove('hidden');
-                btnRead.disabled = true;
-                btnWrite.disabled = true;
-                btnRead.classList.add('opacity-50', 'cursor-not-allowed');
-                btnWrite.classList.add('opacity-50', 'cursor-not-allowed');
-                log("Web NFC API is NOT supported on this browser/device.", "error");
-            }
-        }
-
-        // Set UI State
-        function setScanningState(isActive, message = "Waiting for tag tap...") {
-            if (isActive) {
-                activeState.classList.remove('hidden');
-                activeStateText.textContent = message;
-                btnRead.disabled = true;
-                btnWrite.disabled = true;
-                btnStop.classList.remove('hidden');
-            } else {
-                activeState.classList.add('hidden');
-                btnRead.disabled = false;
-                btnWrite.disabled = false;
-                btnStop.classList.add('hidden');
-            }
-        }
-
-        // Stop current NFC operation
-        function stopNfcOperation() {
-            if (abortController) {
-                abortController.abort();
-                abortController = null;
-                setScanningState(false);
-                log("Operation aborted by user.", "warning");
-            }
-        }
-
-        // --- READ FUNCTIONALITY ---
-        async function startReading() {
-            try {
-                log("Requesting NFC permissions and starting scan...");
-                abortController = new AbortController();
-                const ndef = new NDEFReader();
-                
-                await ndef.scan({ signal: abortController.signal });
-                
-                log("Scan started successfully. Please tap an NFC tag to the back of your device.", "success");
-                setScanningState(true, "Scanning... Tap an NFC tag.");
-
-                ndef.onreadingerror = () => {
-                    log("Error reading tag. The tag might be unformatted or not NDEF compatible.", "error");
-                };
-
-                ndef.onreading = ({ message, serialNumber }) => {
-                    log(`Tag Detected! Serial Number: ${serialNumber || 'N/A'}`, "success");
-                    decodeNdefMessage(message);
-                };
-
-            } catch (error) {
-                log(`Scan failed: ${error.message}`, "error");
-                setScanningState(false);
-            }
-        }
-
-        // Decode NDEF Messages
-        function decodeNdefMessage(message) {
-            if (message.records.length === 0) {
-                log("Tag is empty (0 records found).", "warning");
-                return;
-            }
-
-            log(`Found ${message.records.length} record(s) on tag:`);
-
-            let decodedDataHTML = `<div class="space-y-2">`;
-            
-            for (const record of message.records) {
-                decodedDataHTML += `<div class="border border-gray-600 p-2 rounded">`;
-                decodedDataHTML += `<div class="font-bold text-gray-300 border-b border-gray-600 mb-1">Type: ${record.recordType}</div>`;
-                
-                try {
-                    switch (record.recordType) {
-                        case "text":
-                            const textDecoder = new TextDecoder(record.encoding || 'utf-8');
-                            const text = textDecoder.decode(record.data);
-                            decodedDataHTML += `<div><strong>Text:</strong> ${text}</div>`;
-                            decodedDataHTML += `<div class="text-xs text-gray-500">Lang: ${record.lang || 'N/A'}</div>`;
-                            break;
-                            
-                        case "url":
-                            const urlDecoder = new TextDecoder();
-                            const url = urlDecoder.decode(record.data);
-                            decodedDataHTML += `<div><strong>URL:</strong> <a href="${url}" target="_blank" class="text-blue-400 hover:underline">${url}</a></div>`;
-                            break;
-                            
-                        case "mime":
-                            if (record.mediaType === "application/json") {
-                                const jsonDecoder = new TextDecoder();
-                                const jsonStr = jsonDecoder.decode(record.data);
-                                try {
-                                    const jsonObj = JSON.parse(jsonStr);
-                                    decodedDataHTML += `<pre class="text-xs overflow-x-auto">${JSON.stringify(jsonObj, null, 2)}</pre>`;
-                                } catch (e) {
-                                    decodedDataHTML += `<div><strong>JSON (Raw):</strong> ${jsonStr}</div>`;
-                                }
-                            } else {
-                                decodedDataHTML += `<div><strong>MIME Type:</strong> ${record.mediaType}</div>`;
-                                decodedDataHTML += `<div class="text-xs text-gray-400">Binary data not displayed</div>`;
-                            }
-                            break;
-                            
-                        case "empty":
-                            decodedDataHTML += `<div>Empty Record</div>`;
-                            break;
-                            
-                        default:
-                            decodedDataHTML += `<div>Unhandled record type.</div>`;
-                    }
-                } catch (e) {
-                    decodedDataHTML += `<div class="text-red-400">Error decoding record payload: ${e.message}</div>`;
-                }
-                decodedDataHTML += `</div>`;
-            }
-            decodedDataHTML += `</div>`;
-            
-            log(decodedDataHTML, "data");
-        }
-
-        // --- WRITE FUNCTIONALITY ---
-        async function startWriting() {
-            const type = writeType.value;
-            const data = writeData.value.trim();
-
-            if (!data) {
-                log("Please enter payload data to write.", "error");
-                return;
-            }
-
-            try {
-                log("Preparing to write data...");
-                abortController = new AbortController();
-                const ndef = new NDEFReader();
-                
-                setScanningState(true, "Ready to write. Tap an NFC tag now.");
-
-                // Prepare NDEF Records based on type
-                let records = [];
-                if (type === 'text') {
-                    records.push({ recordType: "text", data: data });
-                } else if (type === 'url') {
-                    // Basic URL validation
-                    let safeUrl = data;
-                    if (!safeUrl.startsWith('http://') && !safeUrl.startsWith('https://')) {
-                         safeUrl = 'https://' + safeUrl;
-                    }
-                    records.push({ recordType: "url", data: safeUrl });
-                }
-
-                log(`Writing ${type} record... Please hold device steady over tag.`);
-                
-                await ndef.write({ records: records }, { signal: abortController.signal });
-                
-                log("Success! Data has been written to the NFC tag.", "success");
-                setScanningState(false);
-                
-            } catch (error) {
-                let errorMsg = error.message;
-                if (error.name === 'NotAllowedError') {
-                    errorMsg = "Permission denied or tag is read-only.";
-                } else if (error.name === 'NotSupportedError') {
-                    errorMsg = "Tag formatting not supported or capacity exceeded.";
-                }
-                log(`Write failed: ${errorMsg}`, "error");
-                setScanningState(false);
-            }
-        }
-
-        // Event Listeners
-        btnRead.addEventListener('click', startReading);
-        btnWrite.addEventListener('click', startWriting);
-        btnStop.addEventListener('click', stopNfcOperation);
         
-        btnClear.addEventListener('click', () => {
-            consoleOutput.innerHTML = '<div class="text-gray-500">Console cleared.</div>';
+        <!-- Bottom Controls -->
+        <div class="flex flex-col items-center gap-4 pointer-events-auto w-full max-w-md mx-auto relative">
+             <button id="btn-scan" class="w-full bg-white text-black font-bold py-5 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.2)] active:bg-gray-200 active:scale-[0.98] transition-all text-xl flex items-center justify-center gap-3 relative overflow-hidden">
+                <div class="w-4 h-4 bg-red-500 rounded-full animate-pulse hidden" id="scan-indicator"></div>
+                <span id="scan-text">Hold to Scan Surface</span>
+            </button>
+            <button id="btn-export" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg backdrop-blur-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-blue-400/30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Export Mesh to .OBJ
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
+
+        // --- DOM Elements ---
+        const startScreen = document.getElementById('start-screen');
+        const arStatusContainer = document.getElementById('ar-status-container');
+        const domOverlay = document.getElementById('dom-overlay');
+        const webxrCanvasContainer = document.getElementById('webxr-canvas-container');
+        
+        const btnExit = document.getElementById('btn-exit');
+        const btnScan = document.getElementById('btn-scan');
+        const btnExport = document.getElementById('btn-export');
+        const pointCountEl = document.getElementById('point-count');
+        const scanIndicator = document.getElementById('scan-indicator');
+        const scanText = document.getElementById('scan-text');
+
+        // --- Core Three.js Variables ---
+        let scene, camera, renderer;
+        let reticle;
+        let scanGroup;
+        
+        // --- WebXR Variables ---
+        let xrSession = null;
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+
+        // --- Scanning Logic Variables ---
+        let isScanning = false;
+        let pointCount = 0;
+        let lastPointPos = new THREE.Vector3(9999, 9999, 9999);
+        const MIN_DISTANCE_M = 0.015; // Minimum distance between mapped voxels (1.5 cm)
+        
+        // Voxel template (A small cube placed at mapped points to form physical geometry for the OBJ)
+        const voxelGeo = new THREE.BoxGeometry(0.015, 0.015, 0.015);
+        const voxelMat = new THREE.MeshStandardMaterial({ 
+            color: 0x44aaff, 
+            roughness: 0.7, 
+            metalness: 0.1 
         });
 
-        // Run Init on Load
-        window.addEventListener('load', init);
+        init();
 
+        function init() {
+            // 1. Setup Scene
+            scene = new THREE.Scene();
+
+            // 2. Setup Camera
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            // 3. Setup Lights (Crucial for voxel visibility)
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            light.position.set(0.5, 1, 0.25);
+            scene.add(light);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(1, 2, 0);
+            scene.add(directionalLight);
+
+            // 4. Setup Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            webxrCanvasContainer.appendChild(renderer.domElement);
+
+            // 5. Setup Scanning Reticle
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.02, 0.025, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+
+            // 6. Setup Container for Scanned Voxels
+            scanGroup = new THREE.Group();
+            scene.add(scanGroup);
+
+            // 7. Initialize WebXR Check
+            checkXRAvailability();
+            
+            // Handle Window Resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            // 8. Setup Interaction Events
+            setupEvents();
+        }
+
+        function checkXRAvailability() {
+            if ('xr' in navigator) {
+                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                    if (supported) {
+                        // Create Start Button
+                        arStatusContainer.innerHTML = '';
+                        const btnEnterAR = document.createElement('button');
+                        btnEnterAR.className = 'w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-transform transform active:scale-[0.98] text-lg tracking-wide';
+                        btnEnterAR.innerText = 'Start AR Scanner';
+                        btnEnterAR.onclick = onRequestSession;
+                        arStatusContainer.appendChild(btnEnterAR);
+                    } else {
+                        showError("WebXR 'immersive-ar' is not supported on this device/browser combination.");
+                    }
+                }).catch(err => {
+                    showError(`WebXR check failed: ${err.message}`);
+                });
+            } else {
+                showError("WebXR API is completely missing. Please use a compatible browser (e.g., Chrome for Android).");
+            }
+        }
+
+        function showError(message) {
+            arStatusContainer.innerHTML = `<div class="text-red-400 bg-red-900/30 p-4 rounded-xl border border-red-500/30 text-sm">${message}</div>`;
+        }
+
+        async function onRequestSession() {
+            // Request the WebXR session with necessary AR features
+            const sessionInit = {
+                requiredFeatures: ['hit-test', 'local'],
+                optionalFeatures: ['dom-overlay'],
+                domOverlay: { root: document.getElementById('dom-overlay') }
+            };
+
+            try {
+                xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
+                xrSession.addEventListener('end', onSessionEnded);
+                
+                // Set the session into the renderer
+                renderer.xr.setReferenceSpaceType('local');
+                await renderer.xr.setSession(xrSession);
+                
+                // Update UI state
+                startScreen.classList.add('hidden');
+                domOverlay.classList.remove('hidden');
+                
+                // Start Render Loop
+                renderer.setAnimationLoop(render);
+                
+            } catch (err) {
+                showError(`Failed to start AR Session: ${err.message}`);
+            }
+        }
+
+        function onSessionEnded() {
+            xrSession.removeEventListener('end', onSessionEnded);
+            xrSession = null;
+            hitTestSourceRequested = false;
+            hitTestSource = null;
+            
+            // Stop loop and restore UI
+            renderer.setAnimationLoop(null);
+            startScreen.classList.remove('hidden');
+            domOverlay.classList.add('hidden');
+            
+            // Do not clear the scan group here, so they can export even if they crash out of AR.
+        }
+
+        function setupEvents() {
+            // Exit Button
+            btnExit.addEventListener('click', () => {
+                if (xrSession) xrSession.end();
+            });
+
+            // Scan Button (Press and Hold)
+            const startScanning = (e) => {
+                e.preventDefault(); // Prevent standard touch/mouse behavior
+                isScanning = true;
+                scanIndicator.classList.remove('hidden');
+                scanText.innerText = "Mapping Surface...";
+                btnScan.classList.replace('bg-white', 'bg-gray-100');
+            };
+
+            const stopScanning = (e) => {
+                e.preventDefault();
+                isScanning = false;
+                scanIndicator.classList.add('hidden');
+                scanText.innerText = "Hold to Scan Surface";
+                btnScan.classList.replace('bg-gray-100', 'bg-white');
+            };
+
+            // Use Pointer Events for unified touch/mouse handling within the DOM Overlay
+            btnScan.addEventListener('pointerdown', startScanning);
+            btnScan.addEventListener('pointerup', stopScanning);
+            btnScan.addEventListener('pointerleave', stopScanning);
+            btnScan.addEventListener('pointercancel', stopScanning);
+
+            // Export Button
+            btnExport.addEventListener('click', exportToOBJ);
+        }
+
+        function render(timestamp, frame) {
+            if (frame) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                // 1. Manage Hit Test Source Setup
+                if (hitTestSourceRequested === false) {
+                    session.requestReferenceSpace('viewer').then((viewerSpace) => {
+                        session.requestHitTestSource({ space: viewerSpace }).then((source) => {
+                            hitTestSource = source;
+                        });
+                    });
+                    
+                    // Reset if session ends unexpectedly
+                    session.addEventListener('end', () => {
+                        hitTestSourceRequested = false;
+                        hitTestSource = null;
+                    });
+                    
+                    hitTestSourceRequested = true;
+                }
+
+                // 2. Perform Hit Test
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        const pose = hit.getPose(referenceSpace);
+                        
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(pose.transform.matrix);
+                        
+                        // 3. Process Spatial Scanning
+                        if (isScanning) {
+                            placeVoxelAtReticle();
+                        }
+                        
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+
+        function placeVoxelAtReticle() {
+            // Extract current position from the reticle's matrix
+            const currentPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+            
+            // Throttle voxel placement based on spatial distance to prevent memory overflow
+            if (currentPos.distanceTo(lastPointPos) > MIN_DISTANCE_M) {
+                // Clone geometry/material reference to keep memory footprint low
+                const voxel = new THREE.Mesh(voxelGeo, voxelMat);
+                
+                // Apply spatial transform
+                voxel.position.copy(currentPos);
+                voxel.quaternion.setFromRotationMatrix(reticle.matrix);
+                
+                // Add to export group
+                scanGroup.add(voxel);
+                
+                // Update trackers
+                lastPointPos.copy(currentPos);
+                pointCount++;
+                pointCountEl.innerText = pointCount;
+            }
+        }
+
+        function exportToOBJ() {
+            if (pointCount === 0) {
+                alert("No points scanned yet. Scan a surface first.");
+                return;
+            }
+
+            // Temporarily change button state to show processing
+            const originalText = btnExport.innerHTML;
+            btnExport.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating Mesh...`;
+            
+            // Defer execution slightly to allow UI to update
+            setTimeout(() => {
+                try {
+                    // Three.js OBJExporter parses the group and calculates absolute transforms
+                    const exporter = new OBJExporter();
+                    const resultData = exporter.parse(scanGroup);
+
+                    // Create binary blob from string payload
+                    const blob = new Blob([resultData], { type: 'text/plain' });
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    // Trigger Client-Side Download
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = blobUrl;
+                    a.download = `ar_scan_${new Date().getTime()}.obj`;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Cleanup
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+                    
+                } catch (error) {
+                    console.error("Export Failed:", error);
+                    alert("Error exporting mesh.");
+                } finally {
+                    btnExport.innerHTML = originalText;
+                }
+            }, 50);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
     </script>
 </body>
 </html>
+
+```
