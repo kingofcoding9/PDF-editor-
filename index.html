@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 3D Modeler - Bones, Animations & Review</title>
+    <title>AI 3D Modeler - Fast Detailed Staged Agent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -69,7 +69,9 @@
                 <span class="w-px h-3 bg-gray-600"></span>
                 <span id="animationCount" class="text-[10px] text-gray-400">0 Animations</span>
                 <span class="w-px h-3 bg-gray-600"></span>
-                <span id="loopCounter" class="text-[10px] text-gray-400">Iteration: 0 • Unlimited</span>
+                <span id="pipelineStage" class="text-[10px] font-semibold text-cyan-300">Stage: Ready</span>
+                <span class="w-px h-3 bg-gray-600"></span>
+                <span id="loopCounter" class="text-[10px] text-gray-400">Stage pass: 0 • Unlimited</span>
             </div>
 
             <div class="flex gap-2 shrink-0">
@@ -94,7 +96,7 @@
                 <button id="inlineUploadBtn" class="p-3 h-[44px] w-[44px] rounded-xl hover:bg-white/10 text-gray-300 flex items-center justify-center shrink-0" title="Attach files">
                     <i data-lucide="upload" class="w-5 h-5"></i>
                 </button>
-                <textarea id="prompt" rows="1" class="glass-input flex-1 rounded-xl px-4 py-3 text-sm resize-none" placeholder="Describe the model, texture edits, and animations you want…" style="min-height: 44px; max-height: 120px;"></textarea>
+                <textarea id="prompt" rows="1" class="glass-input flex-1 rounded-xl px-4 py-3 text-sm resize-none" placeholder="Describe the highly detailed model you want. Geometry, texture, and animation will be built in separate stages…" style="min-height: 44px; max-height: 120px;"></textarea>
                 <button id="generateBtn" class="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl p-3 h-[44px] w-[44px] flex items-center justify-center transition-colors shrink-0 shadow-lg" disabled title="Start AI agent">
                     <i data-lucide="sparkles" class="w-5 h-5" id="btnIcon"></i>
                     <div id="loadingSpinner" class="spinner hidden"></div>
@@ -123,7 +125,10 @@
                 <h2 class="text-lg font-semibold">Review Exact AI Changes</h2>
                 <p id="reviewSummary" class="text-xs text-gray-400 truncate">No proposal loaded.</p>
             </div>
-            <span id="reviewIteration" class="ml-auto text-[10px] text-gray-400 border border-white/10 rounded-full px-2 py-1 shrink-0">Iteration 0</span>
+            <div class="ml-auto flex items-center gap-2 shrink-0">
+                <span id="reviewStage" class="text-[10px] font-semibold text-cyan-300 border border-cyan-500/20 bg-cyan-500/10 rounded-full px-2 py-1">Geometry Stage</span>
+                <span id="reviewIteration" class="text-[10px] text-gray-400 border border-white/10 rounded-full px-2 py-1">Pass 0</span>
+            </div>
         </div>
 
         <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_380px]">
@@ -142,7 +147,7 @@
                     <textarea id="revisionFeedback" class="glass-input w-full rounded-xl p-3 text-sm resize-none min-h-[130px]" placeholder="Explain what the AI should change in its proposal without applying it."></textarea>
                 </div>
                 <div class="text-[11px] text-gray-400 leading-relaxed">
-                    Nothing on this screen is applied until you approve it. Rejecting stops the agent. Requesting revision keeps the current model unchanged and asks for another proposal.
+                    Nothing is applied until approval. This proposal contains changes for only the active production stage. Requesting revision preserves the project and asks the same specialist stage for a better response.
                 </div>
                 <div class="mt-auto flex flex-col gap-2">
                     <button id="approveChangesBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold flex items-center justify-center gap-2"><i data-lucide="check" class="w-4 h-4"></i> Approve & Continue</button>
@@ -191,13 +196,22 @@
                 <h2 class="text-lg font-semibold flex items-center gap-2"><i data-lucide="cpu" class="w-5 h-5 text-blue-400"></i> Engine Settings</h2>
                 <button id="closeSettingsBtn" class="p-1 rounded-lg hover:bg-white/10"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
             </div>
-            <div class="p-5 flex flex-col gap-6">
+            <div class="p-5 flex flex-col gap-5 overflow-y-auto max-h-[78vh]">
                 <div>
                     <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Gemini API Key</label>
                     <div class="flex gap-2"><input type="password" id="apiKey" class="glass-input flex-1 rounded-lg px-3 py-2.5 text-sm" placeholder="AIzaSy..."><button id="scanModelsBtn" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white px-4 rounded-lg flex items-center justify-center min-w-[100px]"><span id="scanBtnText" class="text-xs font-semibold">Connect</span><div id="scanSpinner" class="spinner hidden"></div></button></div>
                 </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider flex items-center gap-2">Response pacing <i data-lucide="gauge" class="w-3 h-3 text-gray-500"></i></label>
+                    <select id="performanceMode" class="glass-input w-full rounded-lg px-3 py-2.5 text-sm cursor-pointer">
+                        <option value="fast" selected>Fast staged — recommended</option>
+                        <option value="balanced">Balanced staged — larger responses</option>
+                        <option value="maximum">Maximum batch — slowest</option>
+                    </select>
+                    <div class="text-[10px] text-gray-400 mt-1.5 leading-relaxed">All modes keep the same final detail gates. Faster modes split the work into more small, reviewable AI responses instead of one enormous response.</div>
+                </div>
                 <div class="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
-                    <div><div class="text-sm font-semibold text-purple-300 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-4 h-4"></i> Deep Thinking</div><div class="text-[10px] text-gray-400 mt-1 max-w-[230px]">Prefer Pro models for hierarchy, UV, and animation reasoning.</div></div>
+                    <div><div class="text-sm font-semibold text-purple-300 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-4 h-4"></i> Deep Thinking</div><div class="text-[10px] text-gray-400 mt-1 max-w-[230px]">Uses slower Pro reasoning. Leave off for much faster staged generation.</div></div>
                     <div class="relative inline-block w-12 align-middle select-none"><input type="checkbox" id="deepThinkingToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600"><label for="deepThinkingToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"></label></div>
                 </div>
                 <div id="modelSelectContainer" class="opacity-50 transition-opacity duration-300">
@@ -219,12 +233,20 @@
             animations: {},
             uploadedAssets: [],
             selectedModel: "",
+            selectedModelOutputLimit: 32768,
             generating: false,
             stopRequested: false,
             iteration: 0,
+            stageIteration: 0,
+            pipelineStage: "geometry",
+            stageResponseCount: { geometry: 0, texture: 0, animation: 0 },
+            stageAppliedCounts: { geometry: 0, texture: 0, animation: 0 },
             originalPrompt: "",
             revisionNotes: "",
             deepThinking: false,
+            performanceMode: "fast",
+            requestStartedAt: 0,
+            requestStatusTimer: null,
             currentAbortController: null,
             reviewResolve: null,
             textureCustom: false,
@@ -238,6 +260,9 @@
             modelBaseName: "ai_model"
         };
 
+        const PIPELINE_STAGES = ["geometry", "texture", "animation"];
+        const STAGE_LABELS = { geometry: "Geometry", texture: "Texture", animation: "Animation" };
+
         let scene, camera, renderer, controls;
         const sceneCubeObjects = {};
         const isInIframe = window.self !== window.top;
@@ -247,7 +272,7 @@
             setupUI();
             ensureRootBone();
             updateStats();
-            log("System ready. Attach references or import a .geo.json/.bbmodel, then connect a Gemini model.", "system");
+            log("System ready. Fast staged mode returns smaller AI batches while preserving the final detail targets.", "system");
             lucide.createIcons();
         });
 
@@ -320,13 +345,27 @@
             $("closeExportBtn").addEventListener("click", () => $("export-modal").classList.add("modal-hidden"));
             $("closeDrawerArea").addEventListener("click", () => $("agent-drawer").classList.add("drawer-closed"));
             $("scanModelsBtn").addEventListener("click", scanAvailableModels);
+            $("performanceMode").addEventListener("change", (event) => {
+                state.performanceMode = event.target.value;
+                localStorage.setItem("ai3d_performance_mode", state.performanceMode);
+                if (state.performanceMode === "fast" && state.deepThinking) {
+                    state.deepThinking = false;
+                    $("deepThinkingToggle").checked = false;
+                    localStorage.setItem("ai3d_deep_thinking", "0");
+                    log("Deep Thinking was disabled because Fast staged mode prioritizes response speed.", "system");
+                }
+                log(`Response pacing changed to ${state.performanceMode}. Final quality gates remain unchanged.`, "system");
+                if ($("apiKey").value.trim()) scanAvailableModels();
+            });
             $("deepThinkingToggle").addEventListener("change", (event) => {
                 state.deepThinking = event.target.checked;
                 localStorage.setItem("ai3d_deep_thinking", state.deepThinking ? "1" : "0");
+                if (state.deepThinking) log("Deep Thinking uses Pro models and can be substantially slower.", "system");
                 if ($("apiKey").value.trim()) scanAvailableModels();
             });
             $("modelSelect").addEventListener("change", (event) => {
                 state.selectedModel = event.target.value;
+                state.selectedModelOutputLimit = Math.max(4096, number(event.target.selectedOptions[0]?.dataset.outputLimit, 32768));
                 localStorage.setItem("ai3d_selected_model", state.selectedModel);
                 updateGenerateAvailability();
                 log(`Model selected: ${state.selectedModel.replace("models/", "")}`, "system");
@@ -353,9 +392,13 @@
             $("copyGeoBtn").addEventListener("click", copyGeometry);
 
             if (isInIframe) $("iframeWarning").classList.remove("hidden");
+            const savedMode = localStorage.getItem("ai3d_performance_mode") || "fast";
+            state.performanceMode = ["fast", "balanced", "maximum"].includes(savedMode) ? savedMode : "fast";
+            $("performanceMode").value = state.performanceMode;
             const savedDeep = localStorage.getItem("ai3d_deep_thinking") === "1";
-            state.deepThinking = savedDeep;
-            $("deepThinkingToggle").checked = savedDeep;
+            state.deepThinking = savedDeep && state.performanceMode !== "fast";
+            $("deepThinkingToggle").checked = state.deepThinking;
+            if (savedDeep && state.performanceMode === "fast") localStorage.setItem("ai3d_deep_thinking", "0");
         }
 
         function log(message, type = "info") {
@@ -408,7 +451,10 @@
             $("cubeCount").textContent = `${cubeTotal} Cube${cubeTotal === 1 ? "" : "s"}`;
             $("boneCount").textContent = `${boneTotal} Bone${boneTotal === 1 ? "" : "s"}`;
             $("animationCount").textContent = `${animationTotal} Animation${animationTotal === 1 ? "" : "s"}`;
-            $("loopCounter").textContent = `Iteration: ${state.iteration} • Unlimited`;
+            const stageLabel = state.generating ? STAGE_LABELS[state.pipelineStage] : "Ready";
+            $("pipelineStage").textContent = `Stage: ${stageLabel}`;
+            $("pipelineStage").className = `text-[10px] font-semibold ${state.pipelineStage === "geometry" ? "text-cyan-300" : state.pipelineStage === "texture" ? "text-pink-300" : "text-purple-300"}`;
+            $("loopCounter").textContent = state.generating ? `Stage pass: ${state.stageIteration} • Unlimited` : `Total passes: ${state.iteration} • Unlimited`;
         }
 
         function updateGenerateAvailability() {
@@ -561,6 +607,10 @@
             state.animations = {};
             state.uploadedAssets = [];
             state.iteration = 0;
+            state.stageIteration = 0;
+            state.pipelineStage = "geometry";
+            state.stageResponseCount = { geometry: 0, texture: 0, animation: 0 };
+            state.stageAppliedCounts = { geometry: 0, texture: 0, animation: 0 };
             state.textureCustom = false;
             state.textureReady = false;
             state.textureWidth = 64;
@@ -849,7 +899,15 @@
                 let models = (data.models || []).filter((model) => model.supportedGenerationMethods?.includes("generateContent") && model.name.includes("gemini"));
                 const preferred = state.deepThinking ? models.filter((model) => /pro/i.test(model.name)) : models.filter((model) => /flash/i.test(model.name));
                 if (preferred.length) models = preferred;
-                models.sort((a, b) => b.name.localeCompare(a.name));
+                models.sort((a, b) => {
+                    const rank = (model) => {
+                        const name = model.name.toLowerCase();
+                        if (state.deepThinking || state.performanceMode === "maximum") return name.includes("pro") ? 0 : name.includes("flash") ? 1 : 2;
+                        if (state.performanceMode === "fast") return name.includes("flash-lite") ? 0 : name.includes("flash") ? 1 : 2;
+                        return name.includes("flash") && !name.includes("lite") ? 0 : name.includes("flash-lite") ? 1 : 2;
+                    };
+                    return rank(a) - rank(b) || b.name.localeCompare(a.name);
+                });
                 const select = $("modelSelect");
                 select.textContent = "";
                 const saved = localStorage.getItem("ai3d_selected_model");
@@ -857,11 +915,13 @@
                     const option = document.createElement("option");
                     option.value = model.name;
                     option.textContent = model.displayName || model.name.replace("models/", "");
+                    option.dataset.outputLimit = String(model.outputTokenLimit || 32768);
                     option.selected = saved ? model.name === saved : index === 0;
                     select.appendChild(option);
                 });
                 if (!models.length) throw new Error("No compatible generateContent models were returned.");
                 state.selectedModel = select.value || models[0].name;
+                state.selectedModelOutputLimit = Math.max(4096, number(select.selectedOptions[0]?.dataset.outputLimit, 32768));
                 select.disabled = false;
                 $("modelSelectContainer").classList.remove("opacity-50");
                 localStorage.setItem("ai3d_selected_model", state.selectedModel);
@@ -885,46 +945,82 @@
             state.stopRequested = false;
             state.revisionNotes = "";
             state.iteration = 0;
+            state.stageIteration = 0;
+            state.pipelineStage = "geometry";
+            state.stageResponseCount = { geometry: 0, texture: 0, animation: 0 };
+            state.stageAppliedCounts = { geometry: 0, texture: 0, animation: 0 };
             setGeneratingUI(true);
             $("agent-drawer").classList.remove("drawer-closed");
-            log(`Started unlimited approval-driven agent for: “${prompt}”`, "system");
+            log(`Started maximum-detail staged production for: “${prompt}”`, "system");
+            log("Pipeline order is locked: GEOMETRY → TEXTURE → ANIMATION. Each AI response handles exactly one stage.", "system");
 
             try {
-                while (!state.stopRequested) {
-                    state.iteration += 1;
-                    updateStats();
-                    updateAgentStatus(state.deepThinking ? "Deep planning model, bones, texture & animations" : "Planning model, bones, texture & animations", state.deepThinking ? "thinking" : "working");
-                    const proposal = await requestProposal(apiKey);
+                for (const stage of PIPELINE_STAGES) {
                     if (state.stopRequested) break;
-                    const validationIssues = validateProposal(proposal);
-                    if (validationIssues.length) {
-                        state.revisionNotes = `The previous proposal failed mandatory validation. Correct every issue before proposing again:
-- ${validationIssues.join("\n- ")}`;
-                        log(`Rejected invalid AI proposal: ${validationIssues.join(" ")}`, "error");
-                        continue;
-                    }
-                    if (proposal.complete && proposalHasNoChanges(proposal)) {
-                        log(proposal.summary || "The agent reports the model is complete.", "success");
-                        updateAgentStatus("Model complete", "success");
-                        break;
-                    }
-                    log(`Proposal ready: ${proposalChangeCount(proposal)} exact change(s).`, "critique");
-                    const review = await showChangeReview(proposal);
-                    if (review.decision === "stop") {
-                        state.stopRequested = true;
-                        log("Proposal rejected. Agent stopped without applying it.", "system");
-                        break;
-                    }
-                    if (review.decision === "revise") {
-                        state.revisionNotes = review.feedback || "The proposal was rejected. Produce a materially improved alternative while preserving the current model.";
-                        log("Proposal rejected. Requesting a revised proposal without changing the model.", "system");
-                        continue;
-                    }
+                    state.pipelineStage = stage;
+                    state.stageIteration = 0;
                     state.revisionNotes = "";
-                    updateAgentStatus("Applying approved changes", "working");
-                    await applyProposal(proposal);
-                    log("Approved changes applied. Beginning the next quality pass; use Stop at any time.", "success");
-                    await sleep(250);
+                    preparePipelineStage(stage);
+                    updateStats();
+                    log(`━━ ${STAGE_LABELS[stage].toUpperCase()} STAGE STARTED ━━`, "system");
+
+                    let stageComplete = false;
+                    while (!state.stopRequested && !stageComplete) {
+                        state.iteration += 1;
+                        state.stageIteration += 1;
+                        state.stageResponseCount[stage] += 1;
+                        updateStats();
+                        updateAgentStatus(stageWorkingStatus(stage), state.deepThinking ? "thinking" : "working");
+
+                        const proposal = await requestStageProposal(apiKey, stage);
+                        if (state.stopRequested) break;
+                        log(`AI ${STAGE_LABELS[stage].toUpperCase()} RESPONSE ${state.stageResponseCount[stage]}: ${proposal.summary}`, "critique");
+
+                        const validationIssues = validateProposal(proposal, stage);
+                        if (validationIssues.length) {
+                            state.revisionNotes = `The previous ${stage} response failed mandatory validation. Correct every issue in the next ${stage}-only response:
+- ${validationIssues.join("\n- ")}`;
+                            log(`Rejected invalid ${stage} response: ${validationIssues.join(" ")}`, "error");
+                            continue;
+                        }
+
+                        if (proposal.complete && proposalHasNoChanges(proposal)) {
+                            stageComplete = true;
+                            log(`✓ ${STAGE_LABELS[stage]} stage complete: ${proposal.summary}`, "success");
+                            break;
+                        }
+
+                        log(`${STAGE_LABELS[stage]} proposal ready: ${proposalChangeCount(proposal)} exact change(s).`, "critique");
+                        const review = await showChangeReview(proposal, stage);
+                        if (review.decision === "stop") {
+                            state.stopRequested = true;
+                            log(`${STAGE_LABELS[stage]} proposal rejected. Agent stopped without applying it.`, "system");
+                            break;
+                        }
+                        if (review.decision === "revise") {
+                            state.revisionNotes = review.feedback || `The ${stage} proposal was rejected. Produce a materially more detailed and accurate ${stage}-only alternative while preserving the current project.`;
+                            log(`${STAGE_LABELS[stage]} proposal rejected. Requesting a revised ${stage}-only response.`, "system");
+                            continue;
+                        }
+
+                        state.revisionNotes = "";
+                        updateAgentStatus(`Applying approved ${stage} changes`, "working");
+                        await applyProposal(proposal, stage);
+                        state.stageAppliedCounts[stage] += proposalChangeCount(proposal);
+                        log(`Approved ${stage} changes applied. Beginning another unlimited ${stage} quality pass.`, "success");
+                        await sleep(250);
+                    }
+
+                    if (!stageComplete || state.stopRequested) break;
+                    const nextStage = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(stage) + 1];
+                    if (nextStage) log(`Advancing from ${STAGE_LABELS[stage]} to the separate ${STAGE_LABELS[nextStage]} specialist.`, "system");
+                }
+
+                if (!state.stopRequested) {
+                    state.pipelineStage = "animation";
+                    updateStats();
+                    updateAgentStatus("Detailed model pipeline complete", "success");
+                    log("All three dedicated stages are complete: geometry, texture, and animation.", "success");
                 }
             } catch (error) {
                 if (error.name === "AbortError" || state.stopRequested) {
@@ -939,8 +1035,32 @@
                 hideChangeReview();
                 state.currentAbortController = null;
                 setGeneratingUI(false);
+                updateStats();
                 if (state.stopRequested) updateAgentStatus("Stopped by user", "success");
             }
+        }
+
+        function preparePipelineStage(stage) {
+            if (stage === "geometry") {
+                ensureRootBone();
+                return;
+            }
+            if (stage === "texture") {
+                if (!state.textureReady || !state.cachedTextureDataUrl) {
+                    compileProceduralTexture();
+                    log(`Prepared a ${state.textureWidth}×${state.textureHeight} UV atlas from the approved geometry. The texture specialist can now work without changing geometry.`, "system");
+                }
+                return;
+            }
+            if (stage === "animation") {
+                log("Geometry and texture are locked as context. The animation specialist may only create or refine bone animation tracks.", "system");
+            }
+        }
+
+        function stageWorkingStatus(stage) {
+            if (stage === "geometry") return state.deepThinking ? "Deep geometry detailing" : "Building detailed geometry";
+            if (stage === "texture") return state.deepThinking ? "Deep texture detailing" : "Painting detailed texture";
+            return state.deepThinking ? "Deep animation authoring" : "Authoring animations";
         }
 
         function stopAgent(reason = "Stopped.") {
@@ -957,92 +1077,278 @@
             updateAgentStatus("Stopping", "waiting");
         }
 
-        async function requestProposal(apiKey) {
-            renderer.render(scene, camera);
-            const renderBase64 = renderer.domElement.toDataURL("image/jpeg", 0.72).split(",")[1];
-            const currentState = compactModelState();
-            const referenceSummary = state.uploadedAssets.map((asset) => ({ name: asset.name, kind: asset.kind, width: asset.width, height: asset.height, summary: asset.summary?.slice(0, 10000) })).slice(0, 20);
-            const systemPrompt = buildSystemPrompt();
+        async function requestStageProposal(apiKey, stage) {
+            const profile = performanceProfile();
+            const currentState = compactModelStateForStage(stage);
+            const referenceSummary = state.uploadedAssets
+                .filter((asset) => !["geo", "bbmodel", "animation"].includes(asset.kind))
+                .map((asset) => ({ name: asset.name, kind: asset.kind, width: asset.width, height: asset.height, summary: asset.summary?.slice(0, profile.referenceSummaryChars) }))
+                .slice(0, profile.maxReferenceSummaries);
+            const systemPrompt = buildSystemPrompt(stage);
+            const target = stage === "geometry" ? geometryDetailTarget(state.originalPrompt) : stage === "texture" ? textureDetailTarget() : animationDetailTarget();
+            const batch = stageBatchLimits(stage);
             const parts = [{
-                text: `USER REQUEST:\n${state.originalPrompt}\n\nREVISION NOTES FROM USER:\n${state.revisionNotes || "None"}\n\nCURRENT EDITABLE MODEL STATE:\n${JSON.stringify(currentState)}\n\nUPLOADED ASSET INDEX:\n${JSON.stringify(referenceSummary)}\n\nThe next image is the current 3D viewport render.`
-            }, { inlineData: { mimeType: "image/jpeg", data: renderBase64 } }];
+                text: `USER REQUEST:
+${state.originalPrompt}
 
-            if (state.textureReady && state.cachedTextureDataUrl) {
-                const texturePayload = splitDataUrl(state.cachedTextureDataUrl);
-                parts.push({ text: "Current editable texture atlas:" });
+ACTIVE SPECIALIST STAGE:
+${stage.toUpperCase()} ONLY
+
+STAGE PASS:
+${state.stageIteration}
+
+FINAL QUALITY TARGET (unchanged by speed mode):
+${JSON.stringify(target)}
+
+THIS RESPONSE'S STRICT BATCH LIMIT:
+${JSON.stringify(batch)}
+
+REVISION NOTES FROM USER OR VALIDATOR:
+${state.revisionNotes || "None"}
+
+CURRENT STAGE-SCOPED PROJECT STATE:
+${JSON.stringify(currentState)}
+
+UPLOADED ASSET INDEX:
+${JSON.stringify(referenceSummary)}
+
+Return one cohesive, high-impact batch. Do not attempt to serialize the entire remaining stage into one response. Set complete=false whenever another batch is still needed.`
+            }];
+
+            if (shouldAttachViewport(stage)) {
+                const renderBase64 = captureViewportForAi(profile.viewportMaxDimension, profile.jpegQuality).split(",")[1];
+                parts.push({ text: "Current 3D viewport render:" });
+                parts.push({ inlineData: { mimeType: "image/jpeg", data: renderBase64 } });
+            }
+
+            if (stage === "texture" && state.textureReady && state.cachedTextureDataUrl) {
+                const optimizedTexture = await makeAiReferenceDataUrl(state.cachedTextureDataUrl, profile.textureMaxDimension);
+                const texturePayload = splitDataUrl(optimizedTexture);
+                parts.push({ text: `Current editable texture atlas (${state.textureWidth}×${state.textureHeight}). Paint this atlas only; coordinates still use the full atlas dimensions:` });
                 parts.push({ inlineData: { mimeType: texturePayload.mime, data: texturePayload.data } });
             }
-            const imageAssets = state.uploadedAssets.filter((asset) => asset.kind === "image").slice(0, 4);
-            for (const asset of imageAssets) {
-                const payload = splitDataUrl(asset.aiDataUrl || asset.dataUrl);
-                parts.push({ text: `Uploaded visual reference: ${asset.name}` });
-                parts.push({ inlineData: { mimeType: payload.mime, data: payload.data } });
+
+            if (state.stageIteration === 1 || state.revisionNotes) {
+                const imageAssets = state.uploadedAssets.filter((asset) => asset.kind === "image").slice(0, profile.maxVisualReferences);
+                for (const asset of imageAssets) {
+                    const optimized = await makeAiReferenceDataUrl(asset.aiDataUrl || asset.dataUrl, profile.referenceMaxDimension);
+                    const payload = splitDataUrl(optimized);
+                    parts.push({ text: `Uploaded visual reference: ${asset.name}` });
+                    parts.push({ inlineData: { mimeType: payload.mime, data: payload.data } });
+                }
             }
 
             const payload = {
                 contents: [{ role: "user", parts }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
+                systemInstruction: { parts: [{ text: systemPrompt + `
+
+LATENCY CONTROL: This is ${state.performanceMode} staged mode. Obey the per-response batch limit exactly. Prefer several quick approved passes over one giant response.` }] },
                 generationConfig: {
                     responseMimeType: "application/json",
-                    responseSchema: proposalSchema(),
-                    temperature: state.deepThinking ? 0.55 : 0.35
+                    responseSchema: proposalSchema(stage),
+                    temperature: state.deepThinking ? 0.38 : 0.18,
+                    maxOutputTokens: Math.max(4096, Math.min(profile.maxOutputTokens[stage], state.selectedModelOutputLimit || profile.maxOutputTokens[stage])),
+                    candidateCount: 1
                 }
             };
             const modelName = state.selectedModel.replace("models/", "");
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-            state.currentAbortController = new AbortController();
-            const response = await fetchWithRetry(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                signal: state.currentAbortController.signal
-            });
-            const raw = response.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
-            if (!raw) throw new Error("The model returned an empty response.");
-            let parsed;
-            try { parsed = JSON.parse(raw); }
-            catch { throw new Error("The model returned invalid proposal JSON."); }
-            return normalizeProposal(parsed);
+            const started = performance.now();
+            startRequestProgress(stage);
+            try {
+                const response = await fetchWithRetry(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                }, profile.retries, profile.timeoutMs);
+                const elapsed = Math.max(0.1, (performance.now() - started) / 1000);
+                log(`${STAGE_LABELS[stage]} response received in ${elapsed.toFixed(1)}s.`, "system");
+                const raw = response.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+                if (!raw) throw new Error(`The ${stage} specialist returned an empty response.`);
+                let parsed;
+                try { parsed = JSON.parse(raw); }
+                catch { throw new Error(`The ${stage} specialist returned invalid proposal JSON.`); }
+                return normalizeProposal(parsed, stage);
+            } finally {
+                stopRequestProgress();
+                state.currentAbortController = null;
+            }
         }
 
-        function buildSystemPrompt() {
-            return `You are an expert Blockbench and Minecraft Bedrock entity modeler, texture artist, rigger, and animator. You do not directly mutate the project. You propose a precise transaction that the user reviews first.
+        function performanceProfile() {
+            const profiles = {
+                fast: {
+                    maxOutputTokens: { geometry: 6144, texture: 6144, animation: 8192 },
+                    viewportMaxDimension: 448, textureMaxDimension: 384, referenceMaxDimension: 448,
+                    jpegQuality: 0.68, maxVisualReferences: 2, maxReferenceSummaries: 4, referenceSummaryChars: 2500,
+                    retries: 1, timeoutMs: 60000
+                },
+                balanced: {
+                    maxOutputTokens: { geometry: 10240, texture: 8192, animation: 10240 },
+                    viewportMaxDimension: 576, textureMaxDimension: 512, referenceMaxDimension: 512,
+                    jpegQuality: 0.74, maxVisualReferences: 3, maxReferenceSummaries: 6, referenceSummaryChars: 4000,
+                    retries: 2, timeoutMs: 90000
+                },
+                maximum: {
+                    maxOutputTokens: { geometry: 24576, texture: 16384, animation: 24576 },
+                    viewportMaxDimension: 768, textureMaxDimension: 768, referenceMaxDimension: 768,
+                    jpegQuality: 0.82, maxVisualReferences: 6, maxReferenceSummaries: 12, referenceSummaryChars: 8000,
+                    retries: 2, timeoutMs: 150000
+                }
+            };
+            return profiles[state.performanceMode] || profiles.balanced;
+        }
 
-NON-NEGOTIABLE MODELING RULES:
-1. Build only the requested entity/item, never scenery or a floor.
-2. Every cube MUST have a unique semantic snake_case id and name. Never use generic names like cube1, part, group, or block.
-3. Every cube MUST belong to the correct semantic bone. Create an animation-friendly bone hierarchy with meaningful snake_case names such as body, head, left_front_leg, jaw, tail_base.
-4. Bone pivots must be placed at real joints. Parent/child relationships must support clean animation.
-5. The entity must stand on Y=0 unless the prompt explicitly requires otherwise.
-6. Use connected geometry, sensible proportions, symmetry where appropriate, and no accidental floating cubes.
-7. Coordinates x/y/z are cube CENTERS. w/h/d are full dimensions. Rotation values are degrees. px/py/pz are cube rotation pivots.
-8. Preserve useful uploaded geometry, textures, naming, UVs, and animations unless the user requests replacement.
+        function stageBatchLimits(stage) {
+            const limits = {
+                fast: {
+                    geometry: { max_bone_actions: 8, max_cube_actions: 16, goal: "one primary or secondary form cluster" },
+                    texture: { max_texture_actions: 12, goal: "one material or body region" },
+                    animation: { max_animation_actions: 1, goal: "one complete named animation" }
+                },
+                balanced: {
+                    geometry: { max_bone_actions: 12, max_cube_actions: 26, goal: "one cohesive anatomy or detail pass" },
+                    texture: { max_texture_actions: 20, goal: "one cohesive material and shading pass" },
+                    animation: { max_animation_actions: 1, goal: "one complete named animation" }
+                },
+                maximum: {
+                    geometry: { max_bone_actions: 20, max_cube_actions: 48, goal: "one large cohesive geometry pass" },
+                    texture: { max_texture_actions: 36, goal: "one large layered texture pass" },
+                    animation: { max_animation_actions: 2, goal: "up to two complete named animations" }
+                }
+            };
+            return (limits[state.performanceMode] || limits.balanced)[stage];
+        }
 
-ANIMATION RULES:
-1. Create and maintain a complete prompt-appropriate animation set, not just geometry.
-2. For an animal such as a sheep, normally include idle, walk, run, and graze/eat animations. Add other prompt-relevant actions when useful.
-3. For humanoids, normally include idle, walk, and run plus requested actions. For objects, create only mechanically meaningful animations.
-4. Animate bones, not individual unnamed cubes. Keyframes use seconds and degree rotations.
-5. Use seamless first/last poses for looping animations. Keep motion physically coherent and avoid clipping.
+        function shouldAttachViewport(stage) {
+            if (stage === "geometry") return true;
+            return state.stageIteration === 1 || Boolean(state.revisionNotes);
+        }
+
+        function captureViewportForAi(maxDimension, quality = 0.74) {
+            renderer.render(scene, camera);
+            const source = renderer.domElement;
+            const scale = Math.min(1, maxDimension / Math.max(source.width, source.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(source.width * scale));
+            canvas.height = Math.max(1, Math.round(source.height * scale));
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL("image/jpeg", quality);
+        }
+
+        function startRequestProgress(stage) {
+            stopRequestProgress();
+            state.requestStartedAt = Date.now();
+            const update = () => {
+                const seconds = Math.floor((Date.now() - state.requestStartedAt) / 1000);
+                updateAgentStatus(`${STAGE_LABELS[stage]} AI working • ${seconds}s`, state.deepThinking ? "thinking" : "working");
+            };
+            update();
+            state.requestStatusTimer = setInterval(update, 1000);
+        }
+
+        function stopRequestProgress() {
+            if (state.requestStatusTimer) clearInterval(state.requestStatusTimer);
+            state.requestStatusTimer = null;
+        }
+
+        function buildSystemPrompt(stage) {
+            const shared = `You are a world-class Blockbench and Minecraft Bedrock production specialist. The project uses an approval transaction system: you propose exact changes, and nothing is applied until the user approves.
+
+GLOBAL MAXIMUM-DETAIL STANDARD:
+1. Aim for production-quality detail, not a coarse prototype. Use as many purposeful components as needed; there is no artificial cube or pass limit.
+2. Match the prompt and uploaded references closely in silhouette, anatomy, proportions, construction, materials, and personality.
+3. Never add scenery, a floor, or unrelated objects.
+4. Preserve approved work from other stages. Never smuggle changes outside the active stage.
+5. Every response is one self-contained specialist message. Return JSON only, matching the active stage schema exactly.
+6. There is no iteration limit. Set complete=true only when another pass would no longer create a material quality improvement.
+7. A rejected proposal is not applied. Use revision notes to produce a meaningfully better proposal.
+8. Avoid token-wasting commentary. Put a concise but specific production summary in summary and devote output capacity to exact actions.`;
+
+            if (stage === "geometry") return `${shared}
+
+YOU ARE THE GEOMETRY / RIGGING SPECIALIST. DO NOT CREATE TEXTURE OPERATIONS OR ANIMATIONS.
+
+GEOMETRY RULES:
+1. Build a highly detailed, animation-ready cube model. Start with correct primary masses, then add secondary forms, then tertiary features and silhouette polish over repeated passes.
+2. Every cube MUST have a unique semantic snake_case id and name. Never use generic names such as cube1, part, group, block, element, or object.
+3. Every cube MUST belong to a meaningful semantic bone. Use a clean parent hierarchy and separate any part that should move independently.
+4. Put bone pivots at real anatomical or mechanical joints. Parent/child relationships must support later animation without clipping.
+5. Coordinates x/y/z are cube CENTERS; w/h/d are full dimensions; rotations are degrees; px/py/pz are cube pivots.
+6. Use rotated and overlapping cubes, controlled inflate, layered forms, asymmetric accents where appropriate, and small feature cubes to avoid a simplistic box sculpture.
+7. Model visible features from all angles, including back, underside, joints, facial construction, extremities, connectors, seams, plates, tufts, horns, claws, fingers, or equivalent prompt-specific details.
+8. Maintain grounding at Y=0 unless the prompt explicitly requires floating. Avoid accidental gaps, z-fighting, zero-size cubes, and disconnected geometry.
+9. Preserve useful imported geometry and improve it rather than flattening it.
+10. Only bone_actions and cube_actions are allowed. Completion is judged against the supplied minimum detail target, semantic naming, hierarchy quality, and prompt-specific feature coverage.`;
+
+            if (stage === "texture") return `${shared}
+
+YOU ARE THE TEXTURE / MATERIAL SPECIALIST. GEOMETRY AND ANIMATION ARE LOCKED. DO NOT RETURN BONE, CUBE, OR ANIMATION ACTIONS.
 
 TEXTURE RULES:
-1. Uploaded images may be visual references or the editable active texture. Propose pixel operations when texture edits are needed.
-2. Supported texture actions are resize, clear, fill_rect, outline_rect, set_pixel, tint_rect, and noise_rect.
-3. Preserve the existing texture unless a change is necessary. UV coordinates are atlas pixel coordinates.
-4. Use readable Minecraft-style texture detail and coherent material colors.
+1. Create a high-resolution Minecraft-style texture with deliberate material separation, directional shading, highlights, occlusion, edge wear, grime, fibers, scales, fur clusters, skin variation, metal response, or equivalent prompt-specific surface detail.
+2. Work directly on the supplied UV atlas. Preserve clean UV islands and avoid painting unrelated empty atlas regions unless needed.
+3. Use multiple operations and layered passes rather than one flat fill. Detail should remain readable at normal gameplay distance and reward close inspection.
+4. Uploaded textures may be edited directly; uploaded images may be references. Match important color and marking placement accurately.
+5. Supported actions: resize, clear, fill_rect, outline_rect, set_pixel, tint_rect, noise_rect, gradient_rect, checker_rect, ellipse, line, copy_region, and mirror_region.
+6. Use resize first when the detail target requires greater resolution. Texture dimensions must be powers of two and may be as large as 2048×2048.
+7. Only texture_width, texture_height, and texture_actions are allowed. Never change geometry to solve a painting problem.
+8. Set complete=true only after color blocking, material definition, shading, secondary markings, and fine detail passes are all finished.`;
 
-ITERATION RULES:
-1. There is NO iteration limit. The user controls when the process stops.
-2. If the current model fully satisfies the request, set complete=true and return no actions.
-3. Otherwise set complete=false and include only concrete necessary actions.
-4. Never claim completion while required bones, semantic cube names, prompt-appropriate animations, or texture work are missing.
-5. A rejected proposal is not applied. Use revision notes to generate a better alternative.
-6. Remove actions need only action and id. Add/update actions must contain enough complete data to apply safely.
-7. Return JSON only, matching the schema exactly.`;
+            return `${shared}
+
+YOU ARE THE ANIMATION SPECIALIST. GEOMETRY AND TEXTURE ARE LOCKED. DO NOT RETURN BONE, CUBE, OR TEXTURE ACTIONS.
+
+ANIMATION RULES:
+1. Create a complete, polished prompt-appropriate animation set. For a sheep, include idle, walk, run, and graze/eat. Add requested or clearly useful actions.
+2. Animate semantic bones only. Use physically coherent weight transfer, overlap, follow-through, head stabilization, body bob, foot timing, tail/ear secondary motion, and mechanical constraints where appropriate.
+3. Each animation must have sufficient participating tracks and keyframes to look authored, not placeholder motion.
+4. Looping animations must have compatible first and final poses. Use sensible durations and phase offsets; avoid limb clipping and identical walk/run timing.
+5. Idle must contain subtle life or mechanical settling. Walk must read clearly at normal speed. Run must have greater stride, energy, and suspension. Graze/eat must move the neck/head and supporting body naturally.
+6. Preserve and refine useful imported animations. Do not replace good tracks merely to rename them.
+7. Only animation_actions are allowed. Completion is judged by required animation coverage, track coverage, keyframe density, loop quality, and motion distinction.`;
         }
 
-        function proposalSchema() {
+        function proposalSchema(stage) {
             const vector = { type: "ARRAY", items: { type: "NUMBER" } };
+            const baseProperties = {
+                complete: { type: "BOOLEAN" },
+                summary: { type: "STRING" }
+            };
+            if (stage === "geometry") {
+                return {
+                    type: "OBJECT",
+                    properties: {
+                        ...baseProperties,
+                        bone_actions: { type: "ARRAY", items: { type: "OBJECT", properties: { action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, parent: { type: "STRING" }, pivot: vector, rotation: vector }, required: ["action", "id"] } },
+                        cube_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                            action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, bone: { type: "STRING" },
+                            x: { type: "NUMBER" }, y: { type: "NUMBER" }, z: { type: "NUMBER" }, w: { type: "NUMBER" }, h: { type: "NUMBER" }, d: { type: "NUMBER" },
+                            rx: { type: "NUMBER" }, ry: { type: "NUMBER" }, rz: { type: "NUMBER" }, px: { type: "NUMBER" }, py: { type: "NUMBER" }, pz: { type: "NUMBER" },
+                            color: { type: "STRING" }, uv_x: { type: "NUMBER" }, uv_y: { type: "NUMBER" }, mirror: { type: "BOOLEAN" }, inflate: { type: "NUMBER" }
+                        }, required: ["action", "id"] } }
+                    },
+                    required: ["complete", "summary", "bone_actions", "cube_actions"]
+                };
+            }
+            if (stage === "texture") {
+                return {
+                    type: "OBJECT",
+                    properties: {
+                        ...baseProperties,
+                        texture_width: { type: "NUMBER" },
+                        texture_height: { type: "NUMBER" },
+                        texture_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                            action: { type: "STRING", enum: ["resize", "clear", "fill_rect", "outline_rect", "set_pixel", "tint_rect", "noise_rect", "gradient_rect", "checker_rect", "ellipse", "line", "copy_region", "mirror_region"] },
+                            x: { type: "NUMBER" }, y: { type: "NUMBER" }, x2: { type: "NUMBER" }, y2: { type: "NUMBER" }, to_x: { type: "NUMBER" }, to_y: { type: "NUMBER" },
+                            w: { type: "NUMBER" }, h: { type: "NUMBER" }, color: { type: "STRING" }, color2: { type: "STRING" }, opacity: { type: "NUMBER" }, amount: { type: "NUMBER" },
+                            width: { type: "NUMBER" }, height: { type: "NUMBER" }, cell_size: { type: "NUMBER" }, direction: { type: "STRING", enum: ["horizontal", "vertical", "diagonal"] }, axis: { type: "STRING", enum: ["horizontal", "vertical"] }
+                        }, required: ["action"] } }
+                    },
+                    required: ["complete", "summary", "texture_width", "texture_height", "texture_actions"]
+                };
+            }
             const keyframe = {
                 type: "OBJECT",
                 properties: { time: { type: "NUMBER" }, rotation: vector, position: vector, scale: vector, interpolation: { type: "STRING", enum: ["linear", "catmullrom", "step"] } },
@@ -1051,31 +1357,17 @@ ITERATION RULES:
             return {
                 type: "OBJECT",
                 properties: {
-                    complete: { type: "BOOLEAN" },
-                    summary: { type: "STRING" },
-                    texture_width: { type: "NUMBER" },
-                    texture_height: { type: "NUMBER" },
-                    bone_actions: { type: "ARRAY", items: { type: "OBJECT", properties: { action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, parent: { type: "STRING" }, pivot: vector, rotation: vector }, required: ["action", "id"] } },
-                    cube_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
-                        action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, bone: { type: "STRING" },
-                        x: { type: "NUMBER" }, y: { type: "NUMBER" }, z: { type: "NUMBER" }, w: { type: "NUMBER" }, h: { type: "NUMBER" }, d: { type: "NUMBER" },
-                        rx: { type: "NUMBER" }, ry: { type: "NUMBER" }, rz: { type: "NUMBER" }, px: { type: "NUMBER" }, py: { type: "NUMBER" }, pz: { type: "NUMBER" },
-                        color: { type: "STRING" }, uv_x: { type: "NUMBER" }, uv_y: { type: "NUMBER" }, mirror: { type: "BOOLEAN" }, inflate: { type: "NUMBER" }
-                    }, required: ["action", "id"] } },
+                    ...baseProperties,
                     animation_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
                         action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, length: { type: "NUMBER" }, loop: { type: "BOOLEAN" },
                         bones: { type: "ARRAY", items: { type: "OBJECT", properties: { bone: { type: "STRING" }, keyframes: { type: "ARRAY", items: keyframe } }, required: ["bone", "keyframes"] } }
-                    }, required: ["action", "id"] } },
-                    texture_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
-                        action: { type: "STRING", enum: ["resize", "clear", "fill_rect", "outline_rect", "set_pixel", "tint_rect", "noise_rect"] },
-                        x: { type: "NUMBER" }, y: { type: "NUMBER" }, w: { type: "NUMBER" }, h: { type: "NUMBER" }, color: { type: "STRING" }, opacity: { type: "NUMBER" }, amount: { type: "NUMBER" }, width: { type: "NUMBER" }, height: { type: "NUMBER" }
-                    }, required: ["action"] } }
+                    }, required: ["action", "id"] } }
                 },
-                required: ["complete", "summary", "bone_actions", "cube_actions", "animation_actions", "texture_actions"]
+                required: ["complete", "summary", "animation_actions"]
             };
         }
 
-        function normalizeProposal(raw) {
+        function normalizeProposal(raw, stage = state.pipelineStage) {
             const boneActions = normalizeActionArray(raw.bone_actions).map((item) => {
                 const id = normalizeId(item.id);
                 if (item.action === "remove") return { action: "remove", id };
@@ -1101,11 +1393,20 @@ ITERATION RULES:
                 ...(item.height !== undefined ? { height: number(item.height, state.textureHeight) } : {}),
                 ...(item.color !== undefined ? { color: validColor(item.color) } : {}),
                 ...(item.opacity !== undefined ? { opacity: Math.max(0, Math.min(1, number(item.opacity, 1))) } : {}),
-                ...(item.amount !== undefined ? { amount: Math.max(0, number(item.amount)) } : {})
+                ...(item.amount !== undefined ? { amount: Math.max(0, number(item.amount)) } : {}),
+                ...(item.x2 !== undefined ? { x2: number(item.x2) } : {}),
+                ...(item.y2 !== undefined ? { y2: number(item.y2) } : {}),
+                ...(item.to_x !== undefined ? { to_x: number(item.to_x) } : {}),
+                ...(item.to_y !== undefined ? { to_y: number(item.to_y) } : {}),
+                ...(item.color2 !== undefined ? { color2: validColor(item.color2) } : {}),
+                ...(item.cell_size !== undefined ? { cell_size: Math.max(1, number(item.cell_size, 2)) } : {}),
+                ...(item.direction !== undefined ? { direction: String(item.direction) } : {}),
+                ...(item.axis !== undefined ? { axis: String(item.axis) } : {})
             }));
             return {
+                stage,
                 complete: Boolean(raw.complete),
-                summary: String(raw.summary || "AI proposal"),
+                summary: String(raw.summary || `${STAGE_LABELS[stage]} proposal`),
                 texture_width: Math.max(1, Math.min(2048, number(raw.texture_width, state.textureWidth))),
                 texture_height: Math.max(1, Math.min(2048, number(raw.texture_height, state.textureHeight))),
                 bone_actions: boneActions,
@@ -1119,12 +1420,16 @@ ITERATION RULES:
             return Array.isArray(value) ? value.filter((item) => item && ["add", "update", "remove"].includes(item.action) && item.id) : [];
         }
 
-        function validateProposal(proposal) {
+        function validateProposal(proposal, stage = state.pipelineStage) {
             const issues = [];
             const genericName = /^(cube|part|block|group|bone|element|object|animation)(?:[_-]?\d+)?$/i;
             const futureBones = Object.fromEntries(Object.entries(state.bones).map(([id, bone]) => [id, { ...bone }]));
             const futureCubes = Object.fromEntries(Object.entries(state.cubes).map(([id, cube]) => [id, { ...cube }]));
             const futureAnimations = Object.fromEntries(Object.entries(state.animations).map(([id, animation]) => [id, structuredCloneSafe(animation)]));
+
+            if (stage !== "geometry" && (proposal.bone_actions.length || proposal.cube_actions.length)) issues.push(`${STAGE_LABELS[stage]} responses may not modify bones or cubes.`);
+            if (stage !== "texture" && proposal.texture_actions.length) issues.push(`${STAGE_LABELS[stage]} responses may not modify the texture.`);
+            if (stage !== "animation" && proposal.animation_actions.length) issues.push(`${STAGE_LABELS[stage]} responses may not modify animations.`);
 
             proposal.bone_actions.forEach((action) => {
                 if (action.action === "remove") delete futureBones[action.id];
@@ -1139,38 +1444,128 @@ ITERATION RULES:
                 else futureAnimations[action.id] = structuredCloneSafe(action);
             });
 
-            Object.values(futureBones).forEach((bone) => {
-                if (bone.id !== "root" && genericName.test(bone.name)) issues.push(`Bone “${bone.id}” has a generic name (“${bone.name}”).`);
-                if (bone.parent && !futureBones[bone.parent]) issues.push(`Bone “${bone.name}” references missing parent “${bone.parent}”.`);
-            });
-
-            const cubeNames = new Map();
-            Object.values(futureCubes).forEach((cube) => {
-                if (genericName.test(cube.name)) issues.push(`Cube “${cube.id}” has a generic name (“${cube.name}”).`);
-                if (!futureBones[cube.bone]) issues.push(`Cube “${cube.name}” references missing bone “${cube.bone}”.`);
-                const prior = cubeNames.get(cube.name);
-                if (prior && prior !== cube.id) issues.push(`Cube name “${cube.name}” is duplicated by “${prior}” and “${cube.id}”.`);
-                cubeNames.set(cube.name, cube.id);
-            });
-
-            Object.values(futureAnimations).forEach((animation) => {
-                if (genericName.test(animation.name)) issues.push(`Animation “${animation.id}” has a generic name (“${animation.name}”).`);
-                if (!Array.isArray(animation.bones) || !animation.bones.length) issues.push(`Animation “${animation.name}” contains no bone tracks.`);
-                (animation.bones || []).forEach((track) => {
-                    if (!futureBones[track.bone]) issues.push(`Animation “${animation.name}” references missing bone “${track.bone}”.`);
-                    if (!Array.isArray(track.keyframes) || !track.keyframes.length) issues.push(`Animation “${animation.name}” has an empty track for “${track.bone}”.`);
+            if (stage === "geometry") {
+                Object.values(futureBones).forEach((bone) => {
+                    if (bone.id !== "root" && genericName.test(bone.name)) issues.push(`Bone “${bone.id}” has a generic name (“${bone.name}”).`);
+                    if (bone.parent && !futureBones[bone.parent]) issues.push(`Bone “${bone.name}” references missing parent “${bone.parent}”.`);
+                    if (!Array.isArray(bone.pivot) || bone.pivot.length < 3 || bone.pivot.some((value) => !Number.isFinite(Number(value)))) issues.push(`Bone “${bone.name}” has an invalid pivot.`);
                 });
-            });
 
-            if (proposal.complete) {
-                if (!Object.keys(futureCubes).length) issues.push("The proposal claims completion but the model has no cubes.");
-                const required = requiredAnimationsForPrompt(state.originalPrompt);
-                const names = Object.values(futureAnimations).map((animation) => animation.name.toLowerCase());
-                required.forEach((alternatives) => {
-                    if (!alternatives.some((term) => names.some((name) => name.includes(term)))) issues.push(`The completed model is missing required animation: ${alternatives.join("/")}.`);
+                const cubeNames = new Map();
+                Object.values(futureCubes).forEach((cube) => {
+                    if (genericName.test(cube.name)) issues.push(`Cube “${cube.id}” has a generic name (“${cube.name}”).`);
+                    if (!futureBones[cube.bone]) issues.push(`Cube “${cube.name}” references missing bone “${cube.bone}”.`);
+                    if (![cube.w, cube.h, cube.d].every((value) => Number.isFinite(Number(value)) && Number(value) > 0)) issues.push(`Cube “${cube.name}” has invalid dimensions.`);
+                    const prior = cubeNames.get(cube.name);
+                    if (prior && prior !== cube.id) issues.push(`Cube name “${cube.name}” is duplicated by “${prior}” and “${cube.id}”.`);
+                    cubeNames.set(cube.name, cube.id);
                 });
+
+                if (proposal.complete) {
+                    const target = geometryDetailTarget(state.originalPrompt);
+                    const boneCount = Object.keys(futureBones).filter((id) => id !== "root").length;
+                    const cubeCount = Object.keys(futureCubes).length;
+                    if (!cubeCount) issues.push("The geometry response claims completion but the model has no cubes.");
+                    if (cubeCount < target.minCubes) issues.push(`Maximum-detail geometry requires at least ${target.minCubes} purposeful cubes for this prompt; current projected count is ${cubeCount}.`);
+                    if (boneCount < target.minBones) issues.push(`Animation-ready geometry requires at least ${target.minBones} semantic movable bones for this prompt; current projected count is ${boneCount}.`);
+                    const featureIssues = missingPromptGeometryFeatures(state.originalPrompt, Object.values(futureCubes), Object.values(futureBones));
+                    issues.push(...featureIssues);
+                }
+            }
+
+            if (stage === "texture") {
+                const target = textureDetailTarget();
+                const projectedWidth = Math.max(1, number(proposal.texture_width, state.textureWidth));
+                const projectedHeight = Math.max(1, number(proposal.texture_height, state.textureHeight));
+                if (!isPowerOfTwo(projectedWidth) || !isPowerOfTwo(projectedHeight)) issues.push("Texture dimensions must be powers of two.");
+                if (projectedWidth > 2048 || projectedHeight > 2048) issues.push("Texture dimensions may not exceed 2048×2048.");
+                if (proposal.complete) {
+                    if (projectedWidth < target.minResolution || projectedHeight < target.minResolution) issues.push(`Maximum-detail texture target is at least ${target.minResolution}×${target.minResolution}; projected texture is ${projectedWidth}×${projectedHeight}.`);
+                    const totalOps = state.stageAppliedCounts.texture + proposal.texture_actions.length;
+                    if (totalOps < target.minOperations) issues.push(`Texture completion requires layered material work. At least ${target.minOperations} approved texture operations are expected; projected total is ${totalOps}.`);
+                }
+            }
+
+            if (stage === "animation") {
+                Object.values(futureAnimations).forEach((animation) => {
+                    if (genericName.test(animation.name)) issues.push(`Animation “${animation.id}” has a generic name (“${animation.name}”).`);
+                    if (!Array.isArray(animation.bones) || !animation.bones.length) issues.push(`Animation “${animation.name}” contains no bone tracks.`);
+                    let totalKeyframes = 0;
+                    (animation.bones || []).forEach((track) => {
+                        if (!futureBones[track.bone]) issues.push(`Animation “${animation.name}” references missing bone “${track.bone}”.`);
+                        if (!Array.isArray(track.keyframes) || !track.keyframes.length) issues.push(`Animation “${animation.name}” has an empty track for “${track.bone}”.`);
+                        totalKeyframes += track.keyframes?.length || 0;
+                    });
+                    const name = String(animation.name || "").toLowerCase();
+                    const energetic = /walk|run|sprint|fly|swim|attack|graze|eat/.test(name);
+                    if (energetic && animation.bones.length < Math.min(5, Math.max(3, Object.keys(futureBones).length - 1))) issues.push(`Animation “${animation.name}” needs broader bone participation for production-quality motion.`);
+                    if (energetic && totalKeyframes < 10) issues.push(`Animation “${animation.name}” needs more keyframes; projected total is ${totalKeyframes}.`);
+                });
+
+                if (proposal.complete) {
+                    const required = requiredAnimationsForPrompt(state.originalPrompt);
+                    const names = Object.values(futureAnimations).map((animation) => animation.name.toLowerCase());
+                    required.forEach((alternatives) => {
+                        if (!alternatives.some((term) => names.some((name) => name.includes(term)))) issues.push(`The completed animation stage is missing required animation: ${alternatives.join("/")}.`);
+                    });
+                    if (!Object.keys(futureAnimations).length && required.length) issues.push("The animation response claims completion but no animations exist.");
+                }
             }
             return [...new Set(issues)];
+        }
+
+        function geometryDetailTarget(prompt) {
+            const text = String(prompt || "").toLowerCase();
+            if (/\b(simple|minimal|low[- ]?poly|very basic|placeholder)\b/.test(text)) return { minCubes: 24, minBones: 4, profile: "explicitly simplified" };
+            if (/\b(dragon|monster|mutant|mech|robot|vehicle|machine|boss|demon|creature)\b/.test(text)) return { minCubes: 96, minBones: 18, profile: "complex creature or mechanical subject" };
+            if (/\b(humanoid|person|human|zombie|skeleton|villager|character|knight|soldier)\b/.test(text)) return { minCubes: 80, minBones: 15, profile: "detailed humanoid" };
+            if (/\b(sheep|cow|pig|goat|deer|horse|wolf|dog|cat|bear|lion|tiger|animal)\b/.test(text)) return { minCubes: 72, minBones: 13, profile: "detailed quadruped" };
+            if (/\b(sword|weapon|tool|item|prop|furniture|chest|door)\b/.test(text)) return { minCubes: 42, minBones: 3, profile: "detailed prop" };
+            return { minCubes: 56, minBones: 8, profile: "maximum-detail general model" };
+        }
+
+        function textureDetailTarget() {
+            const cubeCount = Object.keys(state.cubes).length;
+            const text = String(state.originalPrompt || "").toLowerCase();
+            if (/\b(16x16|32x32|low[- ]?resolution|vanilla resolution)\b/.test(text)) return { minResolution: 64, minOperations: 12 };
+            if (cubeCount >= 90) return { minResolution: 512, minOperations: 36 };
+            if (cubeCount >= 50) return { minResolution: 256, minOperations: 28 };
+            return { minResolution: 128, minOperations: 20 };
+        }
+
+        function animationDetailTarget() {
+            return { requiredAnimations: requiredAnimationsForPrompt(state.originalPrompt).map((group) => group.join("/")), standard: "multi-track, keyframe-dense, physically coherent" };
+        }
+
+        function isPowerOfTwo(value) {
+            const integer = Math.round(Number(value));
+            return integer > 0 && (integer & (integer - 1)) === 0;
+        }
+
+        function missingPromptGeometryFeatures(prompt, cubes, bones) {
+            const text = String(prompt || "").toLowerCase();
+            const haystack = [...cubes.map((item) => item.name), ...bones.map((item) => item.name)].join(" ").toLowerCase();
+            const missing = [];
+            const requireFeature = (alternatives, label) => {
+                if (!alternatives.some((term) => haystack.includes(term))) missing.push(`Detailed geometry is missing a semantic ${label} component.`);
+            };
+            if (/\bsheep\b/.test(text)) {
+                requireFeature(["muzzle", "snout", "nose"], "muzzle/snout");
+                requireFeature(["left_ear"], "left ear");
+                requireFeature(["right_ear"], "right ear");
+                requireFeature(["left_eye"], "left eye");
+                requireFeature(["right_eye"], "right eye");
+                requireFeature(["tail"], "tail");
+                requireFeature(["hoof"], "hoof");
+                requireFeature(["wool", "fleece", "tuft"], "wool/fleece detailing");
+            } else if (/\b(humanoid|person|human|zombie|skeleton|villager|character)\b/.test(text)) {
+                ["head", "torso", "left_arm", "right_arm", "left_leg", "right_leg"].forEach((feature) => requireFeature([feature], feature.replaceAll("_", " ")));
+                requireFeature(["left_eye"], "left eye");
+                requireFeature(["right_eye"], "right eye");
+            } else if (/\b(cow|pig|goat|deer|horse|wolf|dog|cat|bear|lion|tiger|animal)\b/.test(text)) {
+                ["head", "body", "left_front_leg", "right_front_leg", "left_hind_leg", "right_hind_leg", "tail"].forEach((feature) => requireFeature([feature], feature.replaceAll("_", " ")));
+            }
+            return missing;
         }
 
         function requiredAnimationsForPrompt(prompt) {
@@ -1194,18 +1589,39 @@ ITERATION RULES:
             return proposal.bone_actions.length + proposal.cube_actions.length + proposal.animation_actions.length + proposal.texture_actions.length;
         }
 
-        function compactModelState() {
-            return {
-                bones: Object.values(state.bones),
-                cubes: Object.values(state.cubes),
-                animations: Object.values(state.animations),
+        function compactModelStateForStage(stage) {
+            const cleanNumber = (value) => Math.round(number(value, 0) * 1000) / 1000;
+            if (stage === "geometry") return {
+                bones: Object.values(state.bones).map(({ id, name, parent, pivot, rotation }) => ({ id, name, parent, pivot: pivot.map(cleanNumber), rotation: rotation.map(cleanNumber) })),
+                cubes: Object.values(state.cubes).map(({ id, name, bone, x, y, z, w, h, d, rx, ry, rz, px, py, pz, inflate }) => ({
+                    id, name, bone, x: cleanNumber(x), y: cleanNumber(y), z: cleanNumber(z), w: cleanNumber(w), h: cleanNumber(h), d: cleanNumber(d),
+                    rx: cleanNumber(rx), ry: cleanNumber(ry), rz: cleanNumber(rz), px: cleanNumber(px), py: cleanNumber(py), pz: cleanNumber(pz), inflate: cleanNumber(inflate)
+                }))
+            };
+            if (stage === "texture") return {
+                bones: Object.values(state.bones).map(({ id, name, parent }) => ({ id, name, parent })),
+                cubes: Object.values(state.cubes).map(({ id, name, bone, w, h, d, uv_x, uv_y, color, mirror }) => ({
+                    id, name, bone, size: [cleanNumber(w), cleanNumber(h), cleanNumber(d)], uv: [cleanNumber(uv_x), cleanNumber(uv_y)], color, mirror
+                })),
                 texture: { width: state.textureWidth, height: state.textureHeight, custom: state.textureCustom, available: state.textureReady }
+            };
+            const cubesByBone = {};
+            Object.values(state.cubes).forEach((cube) => {
+                (cubesByBone[cube.bone] ||= []).push(cube.name);
+            });
+            return {
+                rig: Object.values(state.bones).map(({ id, name, parent, pivot, rotation }) => ({
+                    id, name, parent, pivot: pivot.map(cleanNumber), rotation: rotation.map(cleanNumber), cubes: (cubesByBone[id] || []).slice(0, 24)
+                })),
+                animations: Object.values(state.animations)
             };
         }
 
-        function showChangeReview(proposal) {
+        function showChangeReview(proposal, stage = state.pipelineStage) {
             $("reviewSummary").textContent = proposal.summary;
-            $("reviewIteration").textContent = `Iteration ${state.iteration}`;
+            $("reviewStage").textContent = `${STAGE_LABELS[stage]} Stage`;
+            $("reviewStage").className = `text-[10px] font-semibold border rounded-full px-2 py-1 ${stage === "geometry" ? "text-cyan-300 border-cyan-500/20 bg-cyan-500/10" : stage === "texture" ? "text-pink-300 border-pink-500/20 bg-pink-500/10" : "text-purple-300 border-purple-500/20 bg-purple-500/10"}`;
+            $("reviewIteration").textContent = `Pass ${state.stageIteration}`;
             $("reviewRawJson").textContent = JSON.stringify(proposal, null, 2);
             $("revisionFeedback").value = "";
             renderReviewStats(proposal);
@@ -1237,7 +1653,7 @@ ITERATION RULES:
                 ["Animations", proposal.animation_actions.length, "text-purple-300"],
                 ["Texture operations", proposal.texture_actions.length, "text-pink-300"]
             ];
-            groups.forEach(([label, count, color]) => {
+            groups.filter(([, count]) => count > 0).forEach(([label, count, color]) => {
                 const badge = document.createElement("span");
                 badge.className = `glass-panel rounded-full px-3 py-1.5 text-xs ${color}`;
                 badge.textContent = `${count} ${label}`;
@@ -1301,17 +1717,26 @@ ITERATION RULES:
             return wrapper;
         }
 
-        async function applyProposal(proposal) {
-            applyBoneActions(proposal.bone_actions);
-            applyCubeActions(proposal.cube_actions);
-            applyAnimationActions(proposal.animation_actions);
-            state.textureWidth = proposal.texture_width || state.textureWidth;
-            state.textureHeight = proposal.texture_height || state.textureHeight;
-            if (!state.textureCustom && (proposal.cube_actions.length || !state.textureReady)) compileProceduralTexture();
-            if (proposal.texture_actions.length) applyTextureActions(proposal.texture_actions);
-            refreshTextureCache();
+        async function applyProposal(proposal, stage = state.pipelineStage) {
+            if (stage === "geometry") {
+                applyBoneActions(proposal.bone_actions);
+                applyCubeActions(proposal.cube_actions);
+                rebuildScene();
+                fitCameraToModel();
+            } else if (stage === "texture") {
+                const targetWidth = proposal.texture_width || state.textureWidth;
+                const targetHeight = proposal.texture_height || state.textureHeight;
+                if (!state.textureReady) compileProceduralTexture();
+                const textureCanvas = $("texture-preview-canvas");
+                if (textureCanvas.width !== targetWidth || textureCanvas.height !== targetHeight) resizeTexture(targetWidth, targetHeight);
+                state.textureWidth = targetWidth;
+                state.textureHeight = targetHeight;
+                if (proposal.texture_actions.length) applyTextureActions(proposal.texture_actions);
+                refreshTextureCache();
+            } else if (stage === "animation") {
+                applyAnimationActions(proposal.animation_actions);
+            }
             updateStats();
-            fitCameraToModel();
             await sleep(80);
         }
 
@@ -1398,12 +1823,63 @@ ITERATION RULES:
                 else if (type === "set_pixel") { ctx.fillStyle = color; ctx.fillRect(x, y, 1, 1); }
                 else if (type === "tint_rect") { ctx.globalCompositeOperation = "source-atop"; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
                 else if (type === "noise_rect") applyNoise(ctx, x, y, w, h, color, Math.max(0, Math.min(1, number(action.amount, 0.25))));
+                else if (type === "gradient_rect") applyGradientRect(ctx, x, y, w, h, color, validColor(action.color2, "#000000"), action.direction || "vertical");
+                else if (type === "checker_rect") applyCheckerRect(ctx, x, y, w, h, color, validColor(action.color2, "#000000"), Math.max(1, Math.floor(number(action.cell_size, 2))));
+                else if (type === "ellipse") { ctx.fillStyle = color; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.fill(); }
+                else if (type === "line") { ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, number(action.amount, 1)); ctx.beginPath(); ctx.moveTo(x + 0.5, y + 0.5); ctx.lineTo(number(action.x2, x + w) + 0.5, number(action.y2, y + h) + 0.5); ctx.stroke(); }
+                else if (type === "copy_region") applyCopyRegion(ctx, x, y, w, h, number(action.to_x, x), number(action.to_y, y));
+                else if (type === "mirror_region") applyMirrorRegion(ctx, x, y, w, h, number(action.to_x, x), number(action.to_y, y), action.axis || "horizontal");
                 ctx.restore();
                 log(`Texture operation: ${type} (${x}, ${y}, ${w}, ${h})`, "command");
             });
             state.textureCustom = true;
             state.textureReady = true;
             refreshTextureCache();
+        }
+
+        function applyGradientRect(ctx, x, y, w, h, color1, color2, direction) {
+            let gradient;
+            if (direction === "horizontal") gradient = ctx.createLinearGradient(x, y, x + w, y);
+            else if (direction === "diagonal") gradient = ctx.createLinearGradient(x, y, x + w, y + h);
+            else gradient = ctx.createLinearGradient(x, y, x, y + h);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, w, h);
+        }
+
+        function applyCheckerRect(ctx, x, y, w, h, color1, color2, cellSize) {
+            for (let py = 0; py < h; py += cellSize) {
+                for (let px = 0; px < w; px += cellSize) {
+                    ctx.fillStyle = ((Math.floor(px / cellSize) + Math.floor(py / cellSize)) % 2 === 0) ? color1 : color2;
+                    ctx.fillRect(x + px, y + py, Math.min(cellSize, w - px), Math.min(cellSize, h - py));
+                }
+            }
+        }
+
+        function applyCopyRegion(ctx, x, y, w, h, toX, toY) {
+            const temp = document.createElement("canvas");
+            temp.width = Math.max(1, w);
+            temp.height = Math.max(1, h);
+            temp.getContext("2d").drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+            ctx.drawImage(temp, Math.floor(toX), Math.floor(toY));
+        }
+
+        function applyMirrorRegion(ctx, x, y, w, h, toX, toY, axis) {
+            const temp = document.createElement("canvas");
+            temp.width = Math.max(1, w);
+            temp.height = Math.max(1, h);
+            temp.getContext("2d").drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+            ctx.save();
+            if (axis === "vertical") {
+                ctx.translate(Math.floor(toX), Math.floor(toY) + h);
+                ctx.scale(1, -1);
+            } else {
+                ctx.translate(Math.floor(toX) + w, Math.floor(toY));
+                ctx.scale(-1, 1);
+            }
+            ctx.drawImage(temp, 0, 0);
+            ctx.restore();
         }
 
         function applyNoise(ctx, x, y, w, h, color, amount) {
@@ -1774,21 +2250,35 @@ ITERATION RULES:
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
-        async function fetchWithRetry(url, options, retries = 3) {
-            const delays = [800, 1800, 3500];
+        async function fetchWithRetry(url, options, retries = 2, timeoutMs = 90000) {
+            const delays = [900, 2200];
             let lastError;
-            for (let attempt = 0; attempt < retries; attempt++) {
+            const attempts = Math.max(1, retries);
+            for (let attempt = 0; attempt < attempts; attempt++) {
+                const controller = new AbortController();
+                state.currentAbortController = controller;
+                const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
                 try {
-                    const response = await fetch(url, options);
+                    const response = await fetch(url, { ...options, signal: controller.signal });
+                    clearTimeout(timeout);
                     if (!response.ok) {
                         const details = await response.json().catch(() => ({}));
-                        throw new Error(details.error?.message || `Gemini request failed (${response.status}).`);
+                        const error = new Error(details.error?.message || `Gemini request failed (${response.status}).`);
+                        error.status = response.status;
+                        throw error;
                     }
                     return await response.json();
                 } catch (error) {
-                    if (error.name === "AbortError") throw error;
+                    clearTimeout(timeout);
+                    if (error.name === "AbortError") {
+                        if (state.stopRequested) throw error;
+                        throw new Error(`The AI request exceeded ${Math.round(timeoutMs / 1000)} seconds and was stopped. Try Fast staged mode or turn off Deep Thinking.`);
+                    }
                     lastError = error;
-                    if (attempt < retries - 1) await sleep(delays[attempt]);
+                    const transient = [429, 500, 502, 503, 504].includes(error.status) || /network|fetch|temporar/i.test(error.message || "");
+                    if (!transient || attempt >= attempts - 1) break;
+                    log(`Temporary API problem. Retrying once…`, "system");
+                    await sleep(delays[Math.min(attempt, delays.length - 1)]);
                 }
             }
             throw lastError;
@@ -1850,7 +2340,7 @@ ITERATION RULES:
             return loadImage(dataUrl).then((image) => ({ width: image.width, height: image.height }));
         }
 
-        async function makeAiReferenceDataUrl(dataUrl, maxDimension = 768) {
+        async function makeAiReferenceDataUrl(dataUrl, maxDimension = 512) {
             const image = await loadImage(dataUrl);
             const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
             if (scale === 1 && dataUrl.length < 1_500_000) return dataUrl;
