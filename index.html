@@ -3,140 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Voxel Studio Pro</title>
+    <title>AI 3D Modeler - Bones, Animations & Review</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a24; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; outline: none; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+        body { margin: 0; overflow: hidden; background: #2a2a35; color: #fff; touch-action: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #canvas-container { position: absolute; inset: 0; z-index: 1; outline: none; }
+        #ui-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
         .pointer-events-auto { pointer-events: auto; }
-        .glass-panel { background: rgba(20, 20, 25, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .glass-input { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.15); color: white; }
-        .glass-input:focus { border-color: rgba(96, 165, 250, 0.6); outline: none; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2); }
-        .modal { transition: opacity 0.2s, visibility 0.2s; }
-        .modal-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-        
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        .glass-panel { background: rgba(20, 20, 25, 0.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glass-input { background: rgba(0, 0, 0, 0.52); border: 1px solid rgba(255, 255, 255, 0.15); color: white; }
+        .glass-input:focus { border-color: rgba(96, 165, 250, 0.7); outline: none; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2); }
+        .modal { transition: opacity 0.18s, visibility 0.18s; }
+        .modal-hidden { opacity: 0; visibility: hidden; pointer-events: none !important; }
+        #agent-drawer { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .drawer-closed { transform: translateY(100%); }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
-        
-        .spinner { border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; border-top: 2px solid #60a5fa; width: 16px; height: 16px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 6px; }
+        .spinner { border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; border-top-color: #60a5fa; width: 16px; height: 16px; animation: spin 1s linear infinite; }
         .toggle-checkbox:checked { right: 0; border-color: #8b5cf6; }
         .toggle-checkbox:checked + .toggle-label { background-color: #8b5cf6; }
         .toggle-checkbox { right: 4px; z-index: 1; transition: all 0.3s; }
         .toggle-label { transition: all 0.3s; }
-
+        @keyframes spin { to { transform: rotate(360deg); } }
         .pulse-text { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-        
-        /* Upload & Previews */
-        #reference-preview { display: none; background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.2); }
-        
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .42; } }
+        .log-entry { animation: slideIn 0.2s ease-out forwards; opacity: 0; transform: translateX(-8px); }
+        @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
+        .thinking-mode { border-top: 1px solid rgba(139, 92, 246, 0.55) !important; box-shadow: 0 -10px 40px rgba(139, 92, 246, 0.22) !important; }
+        .thinking-dot { background-color: #a78bfa !important; }
+        .thinking-text { color: #c4b5fd !important; }
         select option { background-color: #1a1a24; color: white; }
+        #texture-preview-container { position: absolute; right: 16px; bottom: 92px; width: 144px; height: 144px; background: #111; border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; overflow: hidden; display: none; z-index: 5; pointer-events: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        #texture-preview-canvas { width: 100%; height: 100%; image-rendering: pixelated; object-fit: contain; }
+        .texture-label { position: absolute; top: 0; left: 0; width: 100%; background: rgba(0,0,0,0.72); font-size: 9px; padding: 3px 4px; color: #bbb; text-align: center; z-index: 2; }
+        .asset-chip { max-width: 220px; }
+        .review-card pre { white-space: pre-wrap; word-break: break-word; }
+        .checkerboard { background-color: #222; background-image: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+        @media (max-width: 640px) {
+            #texture-preview-container { width: 104px; height: 104px; bottom: 118px; right: 10px; }
+            #agent-drawer { height: 52vh; }
+        }
     </style>
 </head>
 <body class="text-sm">
-
     <div id="canvas-container"></div>
-    <canvas id="texture-canvas" style="display:none;"></canvas>
 
-    <div id="ui-layer" class="p-4 flex flex-col justify-between">
-        
-        <div class="flex justify-between items-start pointer-events-auto">
-            <div class="flex gap-2 flex-col">
-                <div class="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-3 shadow-lg">
-                    <div class="flex items-center gap-1.5"><i data-lucide="cuboid" class="w-4 h-4 text-blue-400"></i><span id="blockCount" class="text-xs font-medium text-gray-300">0 Blocks</span></div>
-                    <div class="w-px h-3 bg-gray-600"></div>
-                    <div class="flex items-center gap-1.5"><i data-lucide="bone" class="w-4 h-4 text-purple-400"></i><span id="boneCount" class="text-xs font-medium text-gray-300">0 Bones</span></div>
-                    <div class="w-px h-3 bg-gray-600"></div>
-                    <div class="flex items-center gap-1.5"><i data-lucide="film" class="w-4 h-4 text-green-400"></i><span id="animCount" class="text-xs font-medium text-gray-300">0 Anims</span></div>
-                </div>
-                <!-- Reference Image Preview -->
-                <div id="reference-preview" class="w-16 h-16 rounded-lg shadow-lg relative group">
-                    <button id="clearRefBtn" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="x" class="w-3 h-3"></i></button>
-                    <div class="absolute bottom-0 left-0 w-full bg-black/60 text-[8px] text-center p-0.5 rounded-b-lg">REF</div>
-                </div>
+    <div id="texture-preview-container" title="Current texture">
+        <div class="texture-label" id="texture-label-text">TEXTURE: 64×64</div>
+        <canvas id="texture-preview-canvas"></canvas>
+    </div>
+
+    <input id="assetInput" type="file" multiple hidden accept="image/*,.png,.jpg,.jpeg,.webp,.geo.json,.animation.json,.json,.bbmodel">
+
+    <div id="ui-layer" class="p-3 sm:p-4 flex flex-col justify-between">
+        <div class="flex justify-between items-start pointer-events-auto gap-2">
+            <div class="glass-panel px-3 py-2 rounded-2xl shadow-lg flex flex-wrap items-center gap-2 max-w-[72vw]">
+                <span class="flex items-center gap-1.5"><i data-lucide="cuboid" class="w-4 h-4 text-blue-400"></i><span id="cubeCount" class="text-xs font-medium text-gray-300">0 Cubes</span></span>
+                <span class="w-px h-3 bg-gray-600"></span>
+                <span id="boneCount" class="text-[10px] text-gray-400">0 Bones</span>
+                <span class="w-px h-3 bg-gray-600"></span>
+                <span id="animationCount" class="text-[10px] text-gray-400">0 Animations</span>
+                <span class="w-px h-3 bg-gray-600"></span>
+                <span id="loopCounter" class="text-[10px] text-gray-400">Iteration: 0 • Unlimited</span>
             </div>
-            
-            <div class="flex gap-2">
-                <input type="file" id="fileUpload" accept="image/*,.json,.bbmodel" class="hidden">
-                <button id="uploadBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-blue-300" title="Upload Ref Image or .bbmodel">
-                    <i data-lucide="upload" class="w-4 h-4"></i>
+
+            <div class="flex gap-2 shrink-0">
+                <button id="uploadBtn" class="glass-panel p-2.5 rounded-full hover:bg-white/10 transition-colors shadow-lg text-cyan-300" title="Upload references or editable assets">
+                    <i data-lucide="paperclip" class="w-4 h-4"></i>
                 </button>
-                <button id="exportBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-green-400" title="Export .bbmodel">
+                <button id="exportBtn" class="glass-panel p-2.5 rounded-full hover:bg-white/10 transition-colors shadow-lg text-green-400" title="Export BBModel and full asset bundle">
                     <i data-lucide="download" class="w-4 h-4"></i>
                 </button>
-                <button id="clearBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-red-400" title="Clear Canvas">
+                <button id="clearBtn" class="glass-panel p-2.5 rounded-full hover:bg-white/10 transition-colors shadow-lg text-red-400" title="Clear model">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
-                <button id="openSettingsBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-gray-300">
+                <button id="openSettingsBtn" class="glass-panel p-2.5 rounded-full hover:bg-white/10 transition-colors shadow-lg text-gray-300" title="Settings">
                     <i data-lucide="settings" class="w-4 h-4"></i>
                 </button>
             </div>
         </div>
 
-        <div class="pointer-events-auto w-full max-w-2xl mx-auto mb-2 relative z-20">
+        <div class="pointer-events-auto w-full max-w-3xl mx-auto mb-1 relative z-20">
+            <div id="assetStrip" class="hidden glass-panel rounded-xl px-2 py-2 mb-2 flex gap-2 overflow-x-auto"></div>
             <div class="glass-panel rounded-2xl p-2 shadow-2xl flex items-end gap-2">
-                <textarea id="prompt" rows="1" class="glass-input flex-1 rounded-xl px-4 py-3 text-sm resize-none" placeholder="E.g., Build a detailed wolf with walk and howl animations..." style="min-height: 44px; max-height: 120px;"></textarea>
-                <button id="generateBtn" class="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl p-3 h-[44px] w-[44px] flex items-center justify-center transition-colors shrink-0 shadow-lg" disabled>
+                <button id="inlineUploadBtn" class="p-3 h-[44px] w-[44px] rounded-xl hover:bg-white/10 text-gray-300 flex items-center justify-center shrink-0" title="Attach files">
+                    <i data-lucide="upload" class="w-5 h-5"></i>
+                </button>
+                <textarea id="prompt" rows="1" class="glass-input flex-1 rounded-xl px-4 py-3 text-sm resize-none" placeholder="Describe the model, texture edits, and animations you want…" style="min-height: 44px; max-height: 120px;"></textarea>
+                <button id="generateBtn" class="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl p-3 h-[44px] w-[44px] flex items-center justify-center transition-colors shrink-0 shadow-lg" disabled title="Start AI agent">
                     <i data-lucide="sparkles" class="w-5 h-5" id="btnIcon"></i>
                     <div id="loadingSpinner" class="spinner hidden"></div>
                 </button>
-            </div>
-            <div class="text-center mt-2">
-                <span id="agentStatus" class="text-[10px] font-semibold text-blue-400 uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full backdrop-blur hidden">Agent is idle</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Proposed Changes Review Modal -->
-    <div id="review-modal" class="pointer-events-auto modal modal-hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="glass-panel w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[85vh] border border-blue-500/30">
-            <div class="p-5 border-b border-white/10 flex justify-between items-center bg-blue-900/20">
-                <h2 class="text-lg font-bold flex items-center gap-2 text-blue-100"><i data-lucide="git-pull-request" class="w-5 h-5 text-blue-400"></i> AI Proposed Changes</h2>
-                <span class="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full border border-blue-500/30">Awaiting Approval</span>
-            </div>
-            
-            <div class="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
-                <p class="text-xs text-gray-300">The AI has evaluated the canvas and generated the following instructions. Review them before applying.</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Blocks Mod -->
-                    <div class="bg-black/40 rounded-xl p-4 border border-white/5">
-                        <h3 class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="cuboid" class="w-4 h-4"></i> Geometry Edits</h3>
-                        <ul id="review-blocks-list" class="text-xs space-y-2 font-mono text-gray-300 max-h-40 overflow-y-auto"></ul>
-                    </div>
-                    <!-- Bones Mod -->
-                    <div class="bg-black/40 rounded-xl p-4 border border-white/5">
-                        <h3 class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="bone" class="w-4 h-4"></i> Bone Hierarchy</h3>
-                        <ul id="review-bones-list" class="text-xs space-y-2 font-mono text-gray-300 max-h-40 overflow-y-auto"></ul>
-                    </div>
-                </div>
-
-                <!-- Animations Mod -->
-                <div class="bg-black/40 rounded-xl p-4 border border-white/5">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="film" class="w-4 h-4"></i> Animations Generated</h3>
-                    <ul id="review-anims-list" class="text-xs space-y-2 font-mono text-gray-300"></ul>
-                </div>
-            </div>
-
-            <div class="p-4 border-t border-white/10 flex justify-between bg-black/40">
-                <button id="rejectBtn" class="px-5 py-2.5 bg-red-900/50 hover:bg-red-800 text-red-200 rounded-xl flex items-center gap-2 text-sm font-semibold transition-colors border border-red-800/50">
-                    <i data-lucide="x-circle" class="w-4 h-4"></i> Reject & Finish
-                </button>
-                <button id="approveBtn" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-[0_0_15px_rgba(37,99,235,0.5)]">
-                    <i data-lucide="check-circle-2" class="w-4 h-4"></i> Approve & Apply
+                <button id="stopAgentBtn" class="hidden bg-red-700 hover:bg-red-600 text-white rounded-xl px-3 h-[44px] flex items-center justify-center gap-1.5 transition-colors shrink-0 shadow-lg" title="Stop immediately">
+                    <i data-lucide="square" class="w-4 h-4"></i><span class="hidden sm:inline text-xs font-semibold">Stop</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Settings Modal -->
+    <div id="agent-drawer" class="pointer-events-auto fixed bottom-0 left-0 w-full h-[45vh] glass-panel border-t border-gray-700/50 rounded-t-3xl z-10 drawer-closed shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex flex-col">
+        <div class="w-full flex justify-center py-3 cursor-pointer" id="closeDrawerArea"><div class="w-12 h-1.5 bg-gray-600 rounded-full"></div></div>
+        <div class="px-6 pb-2 flex items-center gap-3 border-b border-white/5">
+            <div class="w-2 h-2 rounded-full bg-blue-500" id="statusDot"></div>
+            <span id="agentStatus" class="text-xs font-semibold text-blue-400 uppercase tracking-wider">Agent is idle</span>
+        </div>
+        <div id="console" class="flex-1 p-5 overflow-y-auto font-mono text-[11px] leading-relaxed flex flex-col gap-1.5 scroll-smooth pb-10"></div>
+    </div>
+
+    <!-- Dedicated exact-change review screen -->
+    <div id="change-review-modal" class="pointer-events-auto modal modal-hidden fixed inset-0 z-[70] bg-[#111118]/98 flex flex-col">
+        <div class="p-4 sm:p-5 border-b border-white/10 flex items-center gap-3 bg-white/[0.03]">
+            <div class="w-10 h-10 rounded-xl bg-yellow-500/15 flex items-center justify-center shrink-0"><i data-lucide="git-pull-request-draft" class="w-5 h-5 text-yellow-300"></i></div>
+            <div class="min-w-0">
+                <h2 class="text-lg font-semibold">Review Exact AI Changes</h2>
+                <p id="reviewSummary" class="text-xs text-gray-400 truncate">No proposal loaded.</p>
+            </div>
+            <span id="reviewIteration" class="ml-auto text-[10px] text-gray-400 border border-white/10 rounded-full px-2 py-1 shrink-0">Iteration 0</span>
+        </div>
+
+        <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_380px]">
+            <div class="min-h-0 overflow-y-auto p-4 sm:p-5">
+                <div id="reviewStats" class="flex flex-wrap gap-2 mb-4"></div>
+                <div id="reviewCards" class="space-y-3"></div>
+                <details class="mt-4 glass-panel rounded-xl overflow-hidden">
+                    <summary class="cursor-pointer px-4 py-3 text-xs font-semibold text-gray-300 hover:bg-white/5">Raw proposal JSON</summary>
+                    <pre id="reviewRawJson" class="border-t border-white/10 p-4 text-[10px] text-gray-300 overflow-auto max-h-[45vh]"></pre>
+                </details>
+            </div>
+
+            <div class="border-t lg:border-t-0 lg:border-l border-white/10 p-4 sm:p-5 flex flex-col gap-4 bg-black/20">
+                <div>
+                    <label for="revisionFeedback" class="block text-xs font-semibold text-gray-300 mb-2">Revision instructions (optional)</label>
+                    <textarea id="revisionFeedback" class="glass-input w-full rounded-xl p-3 text-sm resize-none min-h-[130px]" placeholder="Explain what the AI should change in its proposal without applying it."></textarea>
+                </div>
+                <div class="text-[11px] text-gray-400 leading-relaxed">
+                    Nothing on this screen is applied until you approve it. Rejecting stops the agent. Requesting revision keeps the current model unchanged and asks for another proposal.
+                </div>
+                <div class="mt-auto flex flex-col gap-2">
+                    <button id="approveChangesBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold flex items-center justify-center gap-2"><i data-lucide="check" class="w-4 h-4"></i> Approve & Continue</button>
+                    <button id="reviseChangesBtn" class="w-full py-3 bg-purple-700 hover:bg-purple-600 rounded-xl font-semibold flex items-center justify-center gap-2"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Reject & Request Revision</button>
+                    <button id="rejectChangesBtn" class="w-full py-3 border border-red-800/70 text-red-300 hover:bg-red-950/40 rounded-xl font-semibold flex items-center justify-center gap-2"><i data-lucide="square" class="w-4 h-4"></i> Reject & Stop Agent</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export modal -->
+    <div id="export-modal" class="pointer-events-auto modal modal-hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+        <div class="glass-panel w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div><h2 class="text-lg font-semibold flex items-center gap-2"><i data-lucide="package-check" class="w-5 h-5 text-green-400"></i> Export Complete Model</h2><p class="text-[10px] text-gray-400 mt-1">BBModel includes embedded texture and animations. ZIP includes every standalone asset.</p></div>
+                <button id="closeExportBtn" class="p-1 rounded-lg hover:bg-white/10"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+            </div>
+            <div id="iframeWarning" class="hidden bg-yellow-900/50 border-b border-yellow-700/50 p-2 text-[10px] text-yellow-200 text-center">Embedded mode detected. Your host must allow downloads for files to save directly.</div>
+            <div class="p-4 overflow-y-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <button id="downloadBundleBtn" class="p-4 rounded-xl bg-green-700 hover:bg-green-600 text-left flex items-center gap-3"><i data-lucide="package" class="w-6 h-6"></i><span><b class="block">Full Asset Bundle (.zip)</b><small class="text-green-100/80">BBModel, geometry, animations, texture, manifest</small></span></button>
+                    <button id="downloadBbmodelBtn" class="p-4 rounded-xl bg-blue-700 hover:bg-blue-600 text-left flex items-center gap-3"><i data-lucide="boxes" class="w-6 h-6"></i><span><b class="block">Blockbench Project (.bbmodel)</b><small class="text-blue-100/80">Named cubes, bone hierarchy, embedded texture, animations</small></span></button>
+                    <button id="downloadGeoBtn" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center gap-2"><i data-lucide="braces" class="w-4 h-4 text-cyan-300"></i> Geometry (.geo.json)</button>
+                    <button id="downloadAnimationBtn" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-purple-300"></i> Animations (.animation.json)</button>
+                    <button id="downloadTextureBtn" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center gap-2"><i data-lucide="image-down" class="w-4 h-4 text-pink-300"></i> Texture (.png)</button>
+                    <button id="copyGeoBtn" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center gap-2"><i data-lucide="copy" class="w-4 h-4 text-gray-300"></i> Copy Geometry JSON</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-2"><label class="text-xs font-semibold text-gray-300">Geometry preview</label><span id="exportStats" class="text-[10px] text-gray-500"></span></div>
+                        <textarea id="exportJsonTextarea" readonly class="glass-input w-full rounded-xl p-3 text-[9px] font-mono resize-none h-[270px]"></textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-300 block mb-2">Texture preview</label>
+                        <div class="checkerboard rounded-xl border border-white/10 h-[270px] p-2 flex items-center justify-center"><img id="modalTexturePreview" alt="Texture preview" class="max-w-full max-h-full object-contain" style="image-rendering: pixelated;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings modal -->
     <div id="settings-modal" class="pointer-events-auto modal modal-hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="glass-panel w-full max-w-md rounded-2xl shadow-2xl overflow-hidden pointer-events-auto">
             <div class="p-5 border-b border-white/10 flex justify-between items-center bg-white/5">
@@ -146,131 +194,109 @@
             <div class="p-5 flex flex-col gap-6">
                 <div>
                     <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Gemini API Key</label>
-                    <div class="flex gap-2">
-                        <input type="password" id="apiKey" class="glass-input flex-1 rounded-lg px-3 py-2.5 text-sm" placeholder="AIzaSy...">
-                        <button id="scanModelsBtn" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white px-4 rounded-lg flex items-center justify-center min-w-[100px] transition-colors">
-                            <span id="scanBtnText" class="text-xs font-semibold">Connect</span>
-                            <div id="scanSpinner" class="spinner hidden"></div>
-                        </button>
-                    </div>
+                    <div class="flex gap-2"><input type="password" id="apiKey" class="glass-input flex-1 rounded-lg px-3 py-2.5 text-sm" placeholder="AIzaSy..."><button id="scanModelsBtn" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white px-4 rounded-lg flex items-center justify-center min-w-[100px]"><span id="scanBtnText" class="text-xs font-semibold">Connect</span><div id="scanSpinner" class="spinner hidden"></div></button></div>
                 </div>
                 <div class="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
-                    <div>
-                        <div class="text-sm font-semibold text-purple-300 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-4 h-4"></i> Deep Thinking</div>
-                        <div class="text-[10px] text-gray-400 mt-1 max-w-[200px]">Uses 'Pro' models for better reasoning. Takes longer.</div>
-                    </div>
-                    <div class="relative inline-block w-12 align-middle select-none transition duration-200 ease-in">
-                        <input type="checkbox" name="toggle" id="deepThinkingToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600"/>
-                        <label for="deepThinkingToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"></label>
-                    </div>
+                    <div><div class="text-sm font-semibold text-purple-300 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-4 h-4"></i> Deep Thinking</div><div class="text-[10px] text-gray-400 mt-1 max-w-[230px]">Prefer Pro models for hierarchy, UV, and animation reasoning.</div></div>
+                    <div class="relative inline-block w-12 align-middle select-none"><input type="checkbox" id="deepThinkingToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600"><label for="deepThinkingToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"></label></div>
                 </div>
                 <div id="modelSelectContainer" class="opacity-50 transition-opacity duration-300">
-                    <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider flex items-center gap-2">Vision Model <i data-lucide="eye" class="w-3 h-3 text-gray-500"></i></label>
-                    <div class="relative">
-                        <select id="modelSelect" class="glass-input w-full rounded-lg pl-3 pr-10 py-2.5 text-sm appearance-none cursor-pointer disabled:cursor-not-allowed" disabled>
-                            <option value="">Awaiting connection...</option>
-                        </select>
-                        <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
-                    </div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider flex items-center gap-2">Multimodal Model <i data-lucide="eye" class="w-3 h-3 text-gray-500"></i></label>
+                    <div class="relative"><select id="modelSelect" class="glass-input w-full rounded-lg pl-3 pr-10 py-2.5 text-sm appearance-none cursor-pointer disabled:cursor-not-allowed" disabled><option value="">Awaiting connection…</option></select><i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i></div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        lucide.createIcons();
+    (() => {
+        "use strict";
 
-        // --- GLOBAL STATE ---
+        const $ = (id) => document.getElementById(id);
+        const state = {
+            bones: {},
+            cubes: {},
+            animations: {},
+            uploadedAssets: [],
+            selectedModel: "",
+            generating: false,
+            stopRequested: false,
+            iteration: 0,
+            originalPrompt: "",
+            revisionNotes: "",
+            deepThinking: false,
+            currentAbortController: null,
+            reviewResolve: null,
+            textureCustom: false,
+            textureReady: false,
+            textureWidth: 64,
+            textureHeight: 64,
+            cachedTextureDataUrl: "",
+            cachedGeoJson: "",
+            cachedAnimationJson: "",
+            cachedBbmodel: "",
+            modelBaseName: "ai_model"
+        };
+
         let scene, camera, renderer, controls;
-        let aiBlocks = {};       // Flat dictionary of cubes {id: data}
-        let aiBones = {};        // Hierarchy of bones {name: data}
-        let aiAnimations = [];   // Array of generated animations
-        
-        let selectedModelString = "";
-        let isGenerating = false;
-        let useDeepThinking = false;
-        
-        // Upload State
-        let uploadedImageBase64 = null;
-        
-        // Loop State
-        let activeOriginalPrompt = "";
-        let approvalResolve = null; 
-        
-        // Texture Atlas Math
-        let atlasW = 64, atlasH = 64;
-        let atlasBase64 = "";
+        const sceneCubeObjects = {};
+        const isInIframe = window.self !== window.top;
 
-        // --- UTILS ---
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        }
-
-        window.onload = function() {
+        window.addEventListener("load", () => {
             init3D();
             setupUI();
-        };
+            ensureRootBone();
+            updateStats();
+            log("System ready. Attach references or import a .geo.json/.bbmodel, then connect a Gemini model.", "system");
+            lucide.createIcons();
+        });
 
         function init3D() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1e1e24);
-            scene.fog = new THREE.Fog(0x1e1e24, 40, 150);
+            scene.background = new THREE.Color(0x2a2a35);
+            scene.fog = new THREE.Fog(0x2a2a35, 45, 180);
 
-            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(25, 20, 25);
+            camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 1000);
+            camera.position.set(24, 18, 24);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(innerWidth, innerHeight);
+            renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            $("canvas-container").appendChild(renderer.domElement);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
-            controls.target.set(0, 5, 0);
+            controls.target.set(0, 4, 0);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-
-            const mainLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.92);
             mainLight.position.set(30, 50, 30);
             mainLight.castShadow = true;
-            mainLight.shadow.mapSize.width = 2048;
-            mainLight.shadow.mapSize.height = 2048;
-            mainLight.shadow.camera.near = 0.5;
-            mainLight.shadow.camera.far = 150;
+            mainLight.shadow.mapSize.set(2048, 2048);
             scene.add(mainLight);
+            const fillLight = new THREE.DirectionalLight(0xaaccff, 0.32);
+            fillLight.position.set(-30, 30, -30);
+            scene.add(fillLight);
 
-            const groundGeo = new THREE.PlaneGeometry(200, 200);
-            const groundMat = new THREE.MeshStandardMaterial({ color: 0x15151a, roughness: 1, metalness: 0 });
-            const ground = new THREE.Mesh(groundGeo, groundMat);
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x1f1f27, roughness: 1 }));
             ground.rotation.x = -Math.PI / 2;
             ground.receiveShadow = true;
             scene.add(ground);
+            const grid = new THREE.GridHelper(100, 100, 0x888888, 0x444455);
+            grid.position.y = 0.01;
+            scene.add(grid);
+            const axes = new THREE.AxesHelper(3);
+            axes.position.y = 0.02;
+            scene.add(axes);
 
-            const gridHelper = new THREE.GridHelper(100, 100, 0x444455, 0x222233);
-            gridHelper.position.y = 0.01; 
-            scene.add(gridHelper);
-
-            const originGroup = new THREE.Group();
-            const dotGeo = new THREE.SphereGeometry(0.3, 16, 16);
-            const dotMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
-            const dot = new THREE.Mesh(dotGeo, dotMat);
-            originGroup.add(dot);
-            originGroup.position.y = 0.02;
-            scene.add(originGroup);
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
+            addEventListener("resize", () => {
+                camera.aspect = innerWidth / innerHeight;
                 camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setSize(innerWidth, innerHeight);
             });
-
             animate();
         }
 
@@ -281,645 +307,1614 @@
         }
 
         function setupUI() {
-            document.getElementById('openSettingsBtn').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('modal-hidden'));
-            document.getElementById('closeSettingsBtn').addEventListener('click', () => document.getElementById('settings-modal').classList.add('modal-hidden'));
-            
-            // Upload Handlers
-            document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileUpload').click());
-            document.getElementById('fileUpload').addEventListener('change', handleFileUpload);
-            document.getElementById('clearRefBtn').addEventListener('click', clearReference);
-
-            // Auto-resize prompt
-            const promptInput = document.getElementById('prompt');
-            promptInput.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = (this.scrollHeight) + 'px';
+            const openAssetPicker = () => $("assetInput").click();
+            $("uploadBtn").addEventListener("click", openAssetPicker);
+            $("inlineUploadBtn").addEventListener("click", openAssetPicker);
+            $("assetInput").addEventListener("change", async (event) => {
+                await handleFiles([...event.target.files]);
+                event.target.value = "";
             });
 
-            document.getElementById('deepThinkingToggle').addEventListener('change', (e) => {
-                useDeepThinking = e.target.checked;
-                if(document.getElementById('apiKey').value) scanAvailableModels();
+            $("openSettingsBtn").addEventListener("click", () => $("settings-modal").classList.remove("modal-hidden"));
+            $("closeSettingsBtn").addEventListener("click", () => $("settings-modal").classList.add("modal-hidden"));
+            $("closeExportBtn").addEventListener("click", () => $("export-modal").classList.add("modal-hidden"));
+            $("closeDrawerArea").addEventListener("click", () => $("agent-drawer").classList.add("drawer-closed"));
+            $("scanModelsBtn").addEventListener("click", scanAvailableModels);
+            $("deepThinkingToggle").addEventListener("change", (event) => {
+                state.deepThinking = event.target.checked;
+                localStorage.setItem("ai3d_deep_thinking", state.deepThinking ? "1" : "0");
+                if ($("apiKey").value.trim()) scanAvailableModels();
             });
+            $("modelSelect").addEventListener("change", (event) => {
+                state.selectedModel = event.target.value;
+                localStorage.setItem("ai3d_selected_model", state.selectedModel);
+                updateGenerateAvailability();
+                log(`Model selected: ${state.selectedModel.replace("models/", "")}`, "system");
+            });
+            $("prompt").addEventListener("input", function () {
+                this.style.height = "auto";
+                this.style.height = `${Math.min(this.scrollHeight, 120)}px`;
+                updateGenerateAvailability();
+            });
+            $("generateBtn").addEventListener("click", startAgent);
+            $("stopAgentBtn").addEventListener("click", () => stopAgent("Stopped by user."));
+            $("clearBtn").addEventListener("click", clearAll);
+            $("exportBtn").addEventListener("click", openExportModal);
 
-            document.getElementById('scanModelsBtn').addEventListener('click', scanAvailableModels);
-            document.getElementById('generateBtn').addEventListener('click', startInfiniteLoop);
-            document.getElementById('clearBtn').addEventListener('click', clearScene);
-            document.getElementById('exportBtn').addEventListener('click', exportBBModel);
-            
-            // Review Actions
-            document.getElementById('approveBtn').addEventListener('click', () => { if(approvalResolve) approvalResolve(true); });
-            document.getElementById('rejectBtn').addEventListener('click', () => { if(approvalResolve) approvalResolve(false); });
+            $("approveChangesBtn").addEventListener("click", () => resolveReview("approve"));
+            $("reviseChangesBtn").addEventListener("click", () => resolveReview("revise"));
+            $("rejectChangesBtn").addEventListener("click", () => resolveReview("stop"));
+
+            $("downloadBundleBtn").addEventListener("click", downloadBundle);
+            $("downloadBbmodelBtn").addEventListener("click", () => downloadText(`${state.modelBaseName}.bbmodel`, state.cachedBbmodel, "application/json"));
+            $("downloadGeoBtn").addEventListener("click", () => downloadText(`${state.modelBaseName}.geo.json`, state.cachedGeoJson, "application/json"));
+            $("downloadAnimationBtn").addEventListener("click", () => downloadText(`${state.modelBaseName}.animation.json`, state.cachedAnimationJson, "application/json"));
+            $("downloadTextureBtn").addEventListener("click", downloadTexture);
+            $("copyGeoBtn").addEventListener("click", copyGeometry);
+
+            if (isInIframe) $("iframeWarning").classList.remove("hidden");
+            const savedDeep = localStorage.getItem("ai3d_deep_thinking") === "1";
+            state.deepThinking = savedDeep;
+            $("deepThinkingToggle").checked = savedDeep;
         }
 
-        function setStatus(msg, active=true) {
-            const el = document.getElementById('agentStatus');
-            el.textContent = msg;
-            if(active) {
-                el.classList.remove('hidden');
-                el.classList.add('pulse-text');
-            } else {
-                el.classList.remove('pulse-text');
-                setTimeout(() => el.classList.add('hidden'), 2000);
-            }
+        function log(message, type = "info") {
+            const row = document.createElement("div");
+            row.className = "log-entry flex gap-2 items-start";
+            const icon = document.createElement("i");
+            const text = document.createElement("span");
+            const map = {
+                error: ["alert-circle", "text-red-300", "text-red-400"],
+                success: ["check-circle-2", "text-green-300", "text-green-400"],
+                system: ["terminal", "text-purple-300", "text-purple-400"],
+                command: ["box", "text-gray-400", "text-gray-500"],
+                critique: ["eye", "text-yellow-300 font-medium", "text-yellow-400"],
+                thinking: ["brain-circuit", "text-purple-300 font-medium", "text-purple-400"],
+                info: ["info", "text-gray-300", "text-gray-500"]
+            };
+            const config = map[type] || map.info;
+            icon.dataset.lucide = config[0];
+            icon.className = `w-3.5 h-3.5 ${config[2]} mt-0.5 shrink-0`;
+            text.className = config[1];
+            text.textContent = String(message);
+            row.append(icon, text);
+            $("console").appendChild(row);
+            $("console").scrollTop = $("console").scrollHeight;
+            lucide.createIcons({ root: row });
         }
 
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        function updateAgentStatus(status, mode = "working") {
+            const statusEl = $("agentStatus");
+            const dot = $("statusDot");
+            const drawer = $("agent-drawer");
+            statusEl.textContent = status;
+            drawer.classList.toggle("thinking-mode", state.deepThinking && ["working", "thinking"].includes(mode));
+            const styles = {
+                working: ["text-blue-400 pulse-text", "bg-blue-500 animate-pulse"],
+                thinking: ["thinking-text pulse-text", "thinking-dot animate-pulse"],
+                success: ["text-green-400", "bg-green-500"],
+                error: ["text-red-400", "bg-red-500"],
+                waiting: ["text-yellow-400", "bg-yellow-400 animate-pulse"]
+            };
+            const selected = styles[mode] || styles.working;
+            statusEl.className = `text-xs font-semibold uppercase tracking-wider ${selected[0]}`;
+            dot.className = `w-2 h-2 rounded-full ${selected[1]}`;
+        }
 
-            const reader = new FileReader();
-            
-            if (file.type.startsWith('image/')) {
-                reader.onload = (e) => {
-                    const base64 = e.target.result;
-                    uploadedImageBase64 = base64.split(',')[1];
-                    const preview = document.getElementById('reference-preview');
-                    preview.style.backgroundImage = `url(${base64})`;
-                    preview.style.display = 'block';
-                    setStatus("Image reference loaded.", false);
-                };
-                reader.readAsDataURL(file);
-            } 
-            else if (file.name.endsWith('.bbmodel') || file.name.endsWith('.json')) {
-                reader.onload = (e) => {
-                    try {
-                        const data = JSON.parse(e.target.result);
-                        parseBBModelToScene(data);
-                        setStatus("Model loaded successfully.", false);
-                    } catch(err) {
-                        alert("Failed to parse model file. Must be valid JSON/bbmodel.");
-                        console.error(err);
+        function updateStats() {
+            const cubeTotal = Object.keys(state.cubes).length;
+            const boneTotal = Object.keys(state.bones).filter((id) => id !== "root" || cubeTotal > 0).length;
+            const animationTotal = Object.keys(state.animations).length;
+            $("cubeCount").textContent = `${cubeTotal} Cube${cubeTotal === 1 ? "" : "s"}`;
+            $("boneCount").textContent = `${boneTotal} Bone${boneTotal === 1 ? "" : "s"}`;
+            $("animationCount").textContent = `${animationTotal} Animation${animationTotal === 1 ? "" : "s"}`;
+            $("loopCounter").textContent = `Iteration: ${state.iteration} • Unlimited`;
+        }
+
+        function updateGenerateAvailability() {
+            $("generateBtn").disabled = state.generating || !state.selectedModel || !$("apiKey").value.trim() || !$("prompt").value.trim();
+        }
+
+        function setGeneratingUI(active) {
+            state.generating = active;
+            $("generateBtn").classList.toggle("hidden", active);
+            $("stopAgentBtn").classList.toggle("hidden", !active);
+            $("btnIcon").classList.toggle("hidden", active);
+            $("loadingSpinner").classList.toggle("hidden", !active);
+            $("clearBtn").disabled = active;
+            updateGenerateAvailability();
+        }
+
+        function ensureRootBone() {
+            if (!state.bones.root) state.bones.root = { id: "root", name: "root", parent: "", pivot: [0, 0, 0], rotation: [0, 0, 0] };
+        }
+
+        function normalizeId(value, fallback = "part") {
+            const normalized = String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_\-.]+/g, "_").replace(/^_+|_+$/g, "");
+            return normalized || fallback;
+        }
+
+        function uniqueId(base, collection) {
+            const clean = normalizeId(base);
+            if (!collection[clean]) return clean;
+            let index = 2;
+            while (collection[`${clean}_${index}`]) index++;
+            return `${clean}_${index}`;
+        }
+
+        function vec(value, fallback = [0, 0, 0]) {
+            if (!Array.isArray(value)) return [...fallback];
+            return [0, 1, 2].map((i) => Number.isFinite(Number(value[i])) ? Number(value[i]) : fallback[i]);
+        }
+
+        function number(value, fallback = 0) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
+        function validColor(value, fallback = "#b8b8b8") {
+            const text = String(value || "").trim();
+            return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
+        }
+
+        function normalizedBone(input, existing = null) {
+            const id = normalizeId(input.id || input.name || existing?.id || "bone");
+            const name = normalizeId(input.name || existing?.name || id);
+            const parentRaw = input.parent !== undefined ? input.parent : existing?.parent;
+            const parent = parentRaw ? normalizeId(parentRaw) : "";
+            return { id, name, parent: parent === id ? "" : parent, pivot: vec(input.pivot, existing?.pivot || [0, 0, 0]), rotation: vec(input.rotation, existing?.rotation || [0, 0, 0]) };
+        }
+
+        function normalizedCube(input, existing = null) {
+            const id = normalizeId(input.id || input.name || existing?.id || "cube");
+            const name = normalizeId(input.name || existing?.name || id);
+            const x = number(input.x, existing?.x || 0);
+            const y = number(input.y, existing?.y || 0);
+            const z = number(input.z, existing?.z || 0);
+            return {
+                id,
+                name,
+                bone: normalizeId(input.bone || existing?.bone || "root"),
+                x, y, z,
+                w: Math.max(0.01, number(input.w, existing?.w || 1)),
+                h: Math.max(0.01, number(input.h, existing?.h || 1)),
+                d: Math.max(0.01, number(input.d, existing?.d || 1)),
+                rx: number(input.rx, existing?.rx || 0),
+                ry: number(input.ry, existing?.ry || 0),
+                rz: number(input.rz, existing?.rz || 0),
+                px: number(input.px, input.px !== undefined ? 0 : (existing?.px ?? x)),
+                py: number(input.py, input.py !== undefined ? 0 : (existing?.py ?? y)),
+                pz: number(input.pz, input.pz !== undefined ? 0 : (existing?.pz ?? z)),
+                color: validColor(input.color, existing?.color || "#b8b8b8"),
+                uv_x: Math.max(0, number(input.uv_x, existing?.uv_x || 0)),
+                uv_y: Math.max(0, number(input.uv_y, existing?.uv_y || 0)),
+                mirror: Boolean(input.mirror ?? existing?.mirror ?? false),
+                inflate: number(input.inflate, existing?.inflate || 0)
+            };
+        }
+
+        function normalizedAnimation(input, existing = null) {
+            const id = normalizeId(input.id || input.name || existing?.id || "animation");
+            const tracks = Array.isArray(input.bones) ? input.bones.map((track) => ({
+                bone: normalizeId(track.bone || "root"),
+                keyframes: (Array.isArray(track.keyframes) ? track.keyframes : []).map((frame) => ({
+                    time: Math.max(0, number(frame.time, 0)),
+                    rotation: frame.rotation ? vec(frame.rotation) : undefined,
+                    position: frame.position ? vec(frame.position) : undefined,
+                    scale: frame.scale ? vec(frame.scale, [1, 1, 1]) : undefined,
+                    interpolation: ["linear", "catmullrom", "step"].includes(frame.interpolation) ? frame.interpolation : "linear"
+                })).sort((a, b) => a.time - b.time)
+            })).filter((track) => track.keyframes.length) : (existing?.bones || []);
+            return {
+                id,
+                name: normalizeId(input.name || existing?.name || id),
+                length: Math.max(0.05, number(input.length, existing?.length || 1)),
+                loop: Boolean(input.loop ?? existing?.loop ?? true),
+                bones: tracks
+            };
+        }
+
+        function createCubeMesh(cube) {
+            removeCubeMesh(cube.id);
+            const geometry = new THREE.BoxGeometry(cube.w, cube.h, cube.d);
+            const material = new THREE.MeshStandardMaterial({ color: cube.color, roughness: 0.82, metalness: 0.08 });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = cube.name;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.38, transparent: true }));
+            mesh.add(edges);
+            const pivot = new THREE.Group();
+            pivot.name = `${cube.bone}/${cube.name}`;
+            pivot.rotation.order = "ZYX";
+            pivot.position.set(cube.px, cube.py, cube.pz);
+            pivot.rotation.set(THREE.MathUtils.degToRad(cube.rx), THREE.MathUtils.degToRad(cube.ry), THREE.MathUtils.degToRad(cube.rz));
+            mesh.position.set(cube.x - cube.px, cube.y - cube.py, cube.z - cube.pz);
+            pivot.add(mesh);
+            scene.add(pivot);
+            sceneCubeObjects[cube.id] = pivot;
+        }
+
+        function removeCubeMesh(id) {
+            const object = sceneCubeObjects[id];
+            if (!object) return;
+            scene.remove(object);
+            object.traverse((node) => {
+                node.geometry?.dispose?.();
+                if (Array.isArray(node.material)) node.material.forEach((mat) => mat.dispose?.());
+                else node.material?.dispose?.();
+            });
+            delete sceneCubeObjects[id];
+        }
+
+        function rebuildScene() {
+            Object.keys(sceneCubeObjects).forEach(removeCubeMesh);
+            Object.values(state.cubes).forEach(createCubeMesh);
+            updateStats();
+        }
+
+        function clearAll() {
+            if (state.generating) return;
+            Object.keys(sceneCubeObjects).forEach(removeCubeMesh);
+            state.bones = {};
+            state.cubes = {};
+            state.animations = {};
+            state.uploadedAssets = [];
+            state.iteration = 0;
+            state.textureCustom = false;
+            state.textureReady = false;
+            state.textureWidth = 64;
+            state.textureHeight = 64;
+            const canvas = $("texture-preview-canvas");
+            canvas.width = 64;
+            canvas.height = 64;
+            canvas.getContext("2d").clearRect(0, 0, 64, 64);
+            $("texture-preview-container").style.display = "none";
+            $("console").textContent = "";
+            ensureRootBone();
+            renderAssetStrip();
+            updateStats();
+            updateAgentStatus("Agent is idle", "success");
+            log("Model, animations, texture, and references cleared.", "system");
+        }
+
+        async function handleFiles(files) {
+            if (!files.length) return;
+            $("agent-drawer").classList.remove("drawer-closed");
+            for (const file of files) {
+                try {
+                    const lower = file.name.toLowerCase();
+                    if (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(lower)) {
+                        await importImageAsset(file);
+                    } else {
+                        const text = await file.text();
+                        const json = JSON.parse(text);
+                        if (lower.endsWith(".bbmodel") || json?.meta?.model_format || Array.isArray(json?.elements)) {
+                            importBbmodel(json, file.name);
+                        } else if (json?.["minecraft:geometry"] || json?.format_version && Array.isArray(json?.["minecraft:geometry"])) {
+                            importGeoJson(json, file.name);
+                        } else if (json?.animations) {
+                            importAnimationJson(json, file.name);
+                        } else {
+                            addJsonReferenceAsset(file.name, json, "json");
+                            log(`Attached JSON reference: ${file.name}`, "success");
+                        }
                     }
-                };
-                reader.readAsText(file);
+                } catch (error) {
+                    log(`Could not import ${file.name}: ${error.message}`, "error");
+                }
             }
-            // Reset input
-            event.target.value = '';
+            rebuildScene();
+            renderAssetStrip();
+            fitCameraToModel();
         }
 
-        function clearReference() {
-            uploadedImageBase64 = null;
-            document.getElementById('reference-preview').style.display = 'none';
+        async function importImageAsset(file) {
+            const dataUrl = await readFileDataUrl(file);
+            const dimensions = await imageDimensions(dataUrl);
+            const aiDataUrl = await makeAiReferenceDataUrl(dataUrl);
+            const asset = { id: cryptoRandomId(), name: file.name, kind: "image", mime: file.type || "image/png", dataUrl, aiDataUrl, width: dimensions.width, height: dimensions.height };
+            state.uploadedAssets.push(asset);
+            const looksLikeTexture = dimensions.width <= 1024 && dimensions.height <= 1024 && isPowerOfTwo(dimensions.width) && isPowerOfTwo(dimensions.height);
+            if (!state.textureCustom && looksLikeTexture) {
+                await setActiveTexture(asset);
+                log(`Attached ${file.name} and set it as the editable texture.`, "success");
+            } else {
+                log(`Attached image reference: ${file.name}`, "success");
+            }
         }
 
-        function parseBBModelToScene(data) {
-            clearScene();
-            
-            // Very simplified generic parser. Assumes standard Blockbench format.
-            if(data.elements && data.outliner) {
-                // Build bones
-                const parseOutliner = (nodes, parentName) => {
-                    nodes.forEach(node => {
-                        if(typeof node === 'object' && node.name) {
-                            aiBones[node.name] = {
-                                pivot: node.origin || [0,0,0],
-                                rotation: node.rotation || [0,0,0],
-                                parent: parentName
-                            };
-                            if(node.children) parseOutliner(node.children, node.name);
+        function addJsonReferenceAsset(name, json, kind) {
+            const summary = JSON.stringify(json).slice(0, 60000);
+            state.uploadedAssets.push({ id: cryptoRandomId(), name, kind, summary });
+        }
+
+        async function setActiveTexture(asset) {
+            if (!asset?.dataUrl) return;
+            const image = await loadImage(asset.dataUrl);
+            const maxSize = 2048;
+            const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+            const width = Math.max(1, Math.round(image.width * scale));
+            const height = Math.max(1, Math.round(image.height * scale));
+            const canvas = $("texture-preview-canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, width, height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(image, 0, 0, width, height);
+            state.textureWidth = width;
+            state.textureHeight = height;
+            state.textureCustom = true;
+            state.textureReady = true;
+            refreshTextureCache();
+        }
+
+        function importGeoJson(json, filename) {
+            const geometries = json["minecraft:geometry"];
+            if (!Array.isArray(geometries) || !geometries.length) throw new Error("No minecraft:geometry array found.");
+            const geometry = geometries[0];
+            const description = geometry.description || {};
+            state.textureWidth = number(description.texture_width, state.textureWidth);
+            state.textureHeight = number(description.texture_height, state.textureHeight);
+            const importedBoneIds = {};
+            (geometry.bones || []).forEach((bone, boneIndex) => {
+                const id = uniqueId(bone.name || `bone_${boneIndex + 1}`, state.bones);
+                importedBoneIds[bone.name] = id;
+                state.bones[id] = normalizedBone({ id, name: bone.name || id, parent: bone.parent || "", pivot: bone.pivot, rotation: bone.rotation });
+            });
+            (geometry.bones || []).forEach((bone) => {
+                const boneId = importedBoneIds[bone.name] || "root";
+                if (state.bones[boneId]?.parent && importedBoneIds[state.bones[boneId].parent]) state.bones[boneId].parent = importedBoneIds[state.bones[boneId].parent];
+                (bone.cubes || []).forEach((cube, cubeIndex) => {
+                    const origin = vec(cube.origin);
+                    const size = vec(cube.size, [1, 1, 1]);
+                    const name = cube.name || `${state.bones[boneId]?.name || boneId}_cube_${cubeIndex + 1}`;
+                    const id = uniqueId(name, state.cubes);
+                    const uv = Array.isArray(cube.uv) ? cube.uv : [0, 0];
+                    const normalized = normalizedCube({
+                        id, name, bone: boneId,
+                        x: origin[0] + size[0] / 2,
+                        y: origin[1] + size[1] / 2,
+                        z: origin[2] + size[2] / 2,
+                        w: size[0], h: size[1], d: size[2],
+                        px: cube.pivot?.[0] ?? origin[0] + size[0] / 2,
+                        py: cube.pivot?.[1] ?? origin[1] + size[1] / 2,
+                        pz: cube.pivot?.[2] ?? origin[2] + size[2] / 2,
+                        rx: cube.rotation?.[0] || 0, ry: cube.rotation?.[1] || 0, rz: cube.rotation?.[2] || 0,
+                        uv_x: uv[0] || 0, uv_y: uv[1] || 0, mirror: cube.mirror, inflate: cube.inflate,
+                        color: colorForIndex(Object.keys(state.cubes).length)
+                    });
+                    state.cubes[id] = normalized;
+                });
+            });
+            addJsonReferenceAsset(filename, json, "geo");
+            log(`Imported editable geometry: ${filename}`, "success");
+        }
+
+        function importAnimationJson(json, filename) {
+            Object.entries(json.animations || {}).forEach(([fullName, animation]) => {
+                const shortName = fullName.split(".").pop() || "animation";
+                const id = uniqueId(shortName, state.animations);
+                const tracks = Object.entries(animation.bones || {}).map(([boneName, channels]) => {
+                    const boneId = findBoneIdByName(boneName) || normalizeId(boneName);
+                    const frameMap = {};
+                    ["rotation", "position", "scale"].forEach((channel) => {
+                        const values = channels[channel];
+                        if (!values) return;
+                        if (Array.isArray(values)) {
+                            frameMap[0] = frameMap[0] || { time: 0 };
+                            frameMap[0][channel] = vec(values, channel === "scale" ? [1, 1, 1] : [0, 0, 0]);
+                        } else {
+                            Object.entries(values).forEach(([time, value]) => {
+                                const numericTime = number(time, 0);
+                                frameMap[numericTime] = frameMap[numericTime] || { time: numericTime };
+                                const point = Array.isArray(value) ? value : value?.post || value?.pre || [0, 0, 0];
+                                frameMap[numericTime][channel] = vec(point, channel === "scale" ? [1, 1, 1] : [0, 0, 0]);
+                            });
                         }
                     });
-                };
-                parseOutliner(data.outliner, null);
-
-                // Build blocks
-                data.elements.forEach(el => {
-                    if(!el.from || !el.to) return;
-                    const w = el.to[0] - el.from[0];
-                    const h = el.to[1] - el.from[1];
-                    const d = el.to[2] - el.from[2];
-                    const x = el.from[0] + (w/2);
-                    const y = el.from[1] + (h/2);
-                    const z = el.from[2] + (d/2);
-                    
-                    // Find bone parent by checking outliner
-                    let boneName = "root";
-                    const findBone = (nodes, boneId) => {
-                        for(let n of nodes) {
-                            if(typeof n === 'object') {
-                                if(n.children && n.children.includes(el.uuid)) return n.name;
-                                let res = findBone(n.children || [], boneId);
-                                if(res) return res;
-                            }
-                        }
-                        return null;
-                    };
-                    let found = findBone(data.outliner, el.uuid);
-                    if(found) boneName = found;
-
-                    const blockData = {
-                        action: 'add',
-                        id: el.uuid || generateUUID(),
-                        name: el.name || 'cube',
-                        bone: boneName,
-                        x: x, y: y, z: z, w: w, h: h, d: d,
-                        rx: el.rotation ? el.rotation[0] : 0,
-                        ry: el.rotation ? el.rotation[1] : 0,
-                        rz: el.rotation ? el.rotation[2] : 0,
-                        color: '#cccccc' // generic color if no texture
-                    };
-                    aiBlocks[blockData.id] = { data: blockData, meshGroup: null };
-                });
-                
-                if(data.animations) aiAnimations = data.animations;
-                
-                rebuildThreeScene();
-            }
-        }
-
-        function clearScene() {
-            if(isGenerating) return;
-            Object.values(aiBlocks).forEach(b => {
-                if(b.meshGroup) scene.remove(b.meshGroup);
+                    return { bone: boneId, keyframes: Object.values(frameMap).sort((a, b) => a.time - b.time) };
+                }).filter((track) => track.keyframes.length);
+                state.animations[id] = normalizedAnimation({ id, name: shortName, length: animation.animation_length || 1, loop: animation.loop === true, bones: tracks });
             });
-            aiBlocks = {};
-            aiBones = {};
-            aiAnimations = [];
-            updateCounters();
+            addJsonReferenceAsset(filename, json, "animation");
+            updateStats();
+            log(`Imported animations: ${filename}`, "success");
         }
 
-        function updateCounters() {
-            document.getElementById('blockCount').textContent = `${Object.keys(aiBlocks).length} Blocks`;
-            document.getElementById('boneCount').textContent = `${Object.keys(aiBones).length} Bones`;
-            document.getElementById('animCount').textContent = `${aiAnimations.length} Anims`;
+        function importBbmodel(json, filename) {
+            const groupUuidToBone = {};
+            const elementToBone = {};
+            const walkOutliner = (nodes, parentId = "") => {
+                (nodes || []).forEach((node) => {
+                    if (typeof node === "string") {
+                        elementToBone[node] = parentId || "root";
+                        return;
+                    }
+                    if (!node || typeof node !== "object") return;
+                    if (node.uuid && Array.isArray(node.children)) {
+                        const id = uniqueId(node.name || "bone", state.bones);
+                        groupUuidToBone[node.uuid] = id;
+                        state.bones[id] = normalizedBone({ id, name: node.name || id, parent: parentId, pivot: node.origin || [0, 0, 0], rotation: node.rotation || [0, 0, 0] });
+                        walkOutliner(node.children, id);
+                    } else if (node.uuid) {
+                        elementToBone[node.uuid] = parentId || "root";
+                    }
+                });
+            };
+            walkOutliner(json.outliner || [], "");
+            ensureRootBone();
+            (json.elements || []).forEach((element, index) => {
+                const from = vec(element.from);
+                const to = vec(element.to, [1, 1, 1]);
+                const id = uniqueId(element.name || `cube_${index + 1}`, state.cubes);
+                const uvOffset = element.uv_offset || element.faces?.north?.uv?.slice?.(0, 2) || [0, 0];
+                state.cubes[id] = normalizedCube({
+                    id,
+                    name: element.name || id,
+                    bone: elementToBone[element.uuid] || "root",
+                    x: (from[0] + to[0]) / 2,
+                    y: (from[1] + to[1]) / 2,
+                    z: (from[2] + to[2]) / 2,
+                    w: Math.abs(to[0] - from[0]),
+                    h: Math.abs(to[1] - from[1]),
+                    d: Math.abs(to[2] - from[2]),
+                    px: element.origin?.[0] ?? (from[0] + to[0]) / 2,
+                    py: element.origin?.[1] ?? (from[1] + to[1]) / 2,
+                    pz: element.origin?.[2] ?? (from[2] + to[2]) / 2,
+                    rx: element.rotation?.[0] || 0,
+                    ry: element.rotation?.[1] || 0,
+                    rz: element.rotation?.[2] || 0,
+                    uv_x: uvOffset[0] || 0,
+                    uv_y: uvOffset[1] || 0,
+                    color: colorForIndex(Object.keys(state.cubes).length)
+                });
+            });
+            const resolution = json.resolution || {};
+            state.textureWidth = number(resolution.width, state.textureWidth);
+            state.textureHeight = number(resolution.height, state.textureHeight);
+            const embedded = (json.textures || []).find((texture) => typeof texture.source === "string" && texture.source.startsWith("data:image/"));
+            if (embedded) {
+                const asset = { id: cryptoRandomId(), name: embedded.name || `${filename}_texture.png`, kind: "image", mime: embedded.source.slice(5, embedded.source.indexOf(";")), dataUrl: embedded.source };
+                state.uploadedAssets.push(asset);
+                setActiveTexture(asset).catch((error) => log(`Embedded texture could not be loaded: ${error.message}`, "error"));
+            }
+            (json.animations || []).forEach((animation, animationIndex) => {
+                const id = uniqueId(animation.name || `animation_${animationIndex + 1}`, state.animations);
+                const tracks = [];
+                Object.entries(animation.animators || {}).forEach(([groupUuid, animator]) => {
+                    const boneId = groupUuidToBone[groupUuid] || findBoneIdByName(animator.name) || "root";
+                    const byTime = {};
+                    (animator.keyframes || []).forEach((frame) => {
+                        const time = number(frame.time, 0);
+                        byTime[time] = byTime[time] || { time };
+                        const point = frame.data_points?.[0] || { x: 0, y: 0, z: 0 };
+                        const value = [number(point.x), number(point.y), number(point.z)];
+                        if (["rotation", "position", "scale"].includes(frame.channel)) byTime[time][frame.channel] = value;
+                    });
+                    if (Object.keys(byTime).length) tracks.push({ bone: boneId, keyframes: Object.values(byTime).sort((a, b) => a.time - b.time) });
+                });
+                state.animations[id] = normalizedAnimation({ id, name: animation.name || id, length: animation.length || 1, loop: animation.loop === "loop" || animation.loop === true, bones: tracks });
+            });
+            addJsonReferenceAsset(filename, json, "bbmodel");
+            log(`Imported editable Blockbench project: ${filename}`, "success");
+        }
+
+        function renderAssetStrip() {
+            const strip = $("assetStrip");
+            strip.textContent = "";
+            strip.classList.toggle("hidden", state.uploadedAssets.length === 0);
+            state.uploadedAssets.forEach((asset) => {
+                const chip = document.createElement("div");
+                chip.className = "asset-chip shrink-0 bg-black/35 border border-white/10 rounded-lg px-2 py-1.5 flex items-center gap-2";
+                const icon = document.createElement("i");
+                icon.dataset.lucide = asset.kind === "image" ? "image" : asset.kind === "bbmodel" ? "boxes" : "file-json";
+                icon.className = "w-3.5 h-3.5 text-cyan-300 shrink-0";
+                const name = document.createElement("span");
+                name.className = "text-[10px] text-gray-300 truncate max-w-[120px]";
+                name.textContent = asset.name;
+                chip.append(icon, name);
+                if (asset.kind === "image") {
+                    const use = document.createElement("button");
+                    use.className = "text-[9px] text-pink-300 hover:text-pink-200";
+                    use.textContent = "Use texture";
+                    use.addEventListener("click", () => setActiveTexture(asset).then(() => log(`Active texture changed to ${asset.name}.`, "system")));
+                    chip.appendChild(use);
+                }
+                const remove = document.createElement("button");
+                remove.className = "text-gray-500 hover:text-red-300";
+                remove.title = "Remove reference";
+                remove.textContent = "×";
+                remove.addEventListener("click", () => {
+                    state.uploadedAssets = state.uploadedAssets.filter((item) => item.id !== asset.id);
+                    renderAssetStrip();
+                });
+                chip.appendChild(remove);
+                strip.appendChild(chip);
+            });
+            lucide.createIcons({ root: strip });
         }
 
         async function scanAvailableModels() {
-            const apiKey = document.getElementById('apiKey').value.trim();
-            if (!apiKey) return alert("API Key is required");
-
-            const btnText = document.getElementById('scanBtnText');
-            const spinner = document.getElementById('scanSpinner');
-            const container = document.getElementById('modelSelectContainer');
-            const select = document.getElementById('modelSelect');
-
-            btnText.textContent = ""; spinner.classList.remove('hidden');
-            select.disabled = true; 
-
+            const apiKey = $("apiKey").value.trim();
+            if (!apiKey) return alert("Gemini API key is required.");
+            $("scanBtnText").textContent = "";
+            $("scanSpinner").classList.remove("hidden");
+            $("modelSelect").disabled = true;
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("Invalid API Key");
-
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+                if (!response.ok) throw new Error(`Connection failed (${response.status}).`);
                 const data = await response.json();
-                let validModels = data.models.filter(m => m.supportedGenerationMethods.includes("generateContent") && m.name.includes("gemini") && !m.name.includes("vision"));
-
-                if (useDeepThinking) {
-                    validModels = validModels.filter(m => m.name.includes("pro"));
-                    validModels.sort((a, b) => b.name.localeCompare(a.name)); 
-                } else {
-                    validModels = validModels.filter(m => m.name.includes("flash") || (!m.name.includes("pro") && !m.name.includes("thinking")));
-                }
-
-                if (validModels.length === 0) throw new Error("No compatible models.");
-
-                select.innerHTML = '';
-                validModels.forEach((m, i) => {
-                    const option = document.createElement('option');
-                    option.value = m.name; option.textContent = m.displayName || m.name.replace('models/', '');
-                    if (i === 0) option.selected = true; 
+                let models = (data.models || []).filter((model) => model.supportedGenerationMethods?.includes("generateContent") && model.name.includes("gemini"));
+                const preferred = state.deepThinking ? models.filter((model) => /pro/i.test(model.name)) : models.filter((model) => /flash/i.test(model.name));
+                if (preferred.length) models = preferred;
+                models.sort((a, b) => b.name.localeCompare(a.name));
+                const select = $("modelSelect");
+                select.textContent = "";
+                const saved = localStorage.getItem("ai3d_selected_model");
+                models.forEach((model, index) => {
+                    const option = document.createElement("option");
+                    option.value = model.name;
+                    option.textContent = model.displayName || model.name.replace("models/", "");
+                    option.selected = saved ? model.name === saved : index === 0;
                     select.appendChild(option);
                 });
-
-                container.classList.remove('opacity-50');
-                select.disabled = false; 
-                document.getElementById('generateBtn').disabled = false;
-                selectedModelString = select.value;
-                
+                if (!models.length) throw new Error("No compatible generateContent models were returned.");
+                state.selectedModel = select.value || models[0].name;
+                select.disabled = false;
+                $("modelSelectContainer").classList.remove("opacity-50");
+                localStorage.setItem("ai3d_selected_model", state.selectedModel);
+                updateGenerateAvailability();
+                log(`${state.deepThinking ? "Deep-thinking" : "Standard"} model list loaded.`, "success");
             } catch (error) {
-                alert(`Scan Failed: ${error.message}`);
-                container.classList.add('opacity-50');
+                alert(error.message);
+                log(error.message, "error");
             } finally {
-                btnText.textContent = "Connect"; spinner.classList.add('hidden');
+                $("scanBtnText").textContent = "Connect";
+                $("scanSpinner").classList.add("hidden");
             }
         }
 
-        async function startInfiniteLoop() {
-            const apiKey = document.getElementById('apiKey').value.trim();
-            const promptInput = document.getElementById('prompt');
-            
-            if (!apiKey || !selectedModelString || !promptInput.value.trim()) return;
-            activeOriginalPrompt = promptInput.value.trim();
-
-            isGenerating = true;
-            document.getElementById('generateBtn').disabled = true;
-            document.getElementById('btnIcon').classList.add('hidden');
-            document.getElementById('loadingSpinner').classList.remove('hidden');
-            
-            let isSatisfied = false;
-            setStatus("Thinking...", true);
+        async function startAgent() {
+            const apiKey = $("apiKey").value.trim();
+            const prompt = $("prompt").value.trim();
+            if (!apiKey || !state.selectedModel || !prompt || state.generating) return;
+            state.originalPrompt = prompt;
+            state.modelBaseName = normalizeId(prompt.split(/\s+/).slice(0, 5).join("_"), "ai_model").slice(0, 64);
+            state.stopRequested = false;
+            state.revisionNotes = "";
+            state.iteration = 0;
+            setGeneratingUI(true);
+            $("agent-drawer").classList.remove("drawer-closed");
+            log(`Started unlimited approval-driven agent for: “${prompt}”`, "system");
 
             try {
-                // Infinite Loop - broken only by user rejection or AI reporting complete
-                while (!isSatisfied) {
-                    const result = await runGenerationStep(apiKey, activeOriginalPrompt);
-                    
-                    if (result.type === 'complete') {
-                        isSatisfied = true;
-                    } 
-                    else if (result.type === 'needs_approval') {
-                        setStatus("Awaiting Approval...", true);
-                        
-                        // Populate Review Modal
-                        populateReviewModal(result.data);
-                        document.getElementById('review-modal').classList.remove('modal-hidden');
-                        
-                        const userApproved = await new Promise((resolve) => approvalResolve = resolve);
-                        
-                        document.getElementById('review-modal').classList.add('modal-hidden');
-                        approvalResolve = null;
-
-                        if (userApproved) {
-                            setStatus("Applying Geometry & Bones...", true);
-                            await applyStateRealtime(result.data);
-                        } else {
-                            isSatisfied = true; // User stopped it
-                        }
+                while (!state.stopRequested) {
+                    state.iteration += 1;
+                    updateStats();
+                    updateAgentStatus(state.deepThinking ? "Deep planning model, bones, texture & animations" : "Planning model, bones, texture & animations", state.deepThinking ? "thinking" : "working");
+                    const proposal = await requestProposal(apiKey);
+                    if (state.stopRequested) break;
+                    const validationIssues = validateProposal(proposal);
+                    if (validationIssues.length) {
+                        state.revisionNotes = `The previous proposal failed mandatory validation. Correct every issue before proposing again:
+- ${validationIssues.join("\n- ")}`;
+                        log(`Rejected invalid AI proposal: ${validationIssues.join(" ")}`, "error");
+                        continue;
                     }
+                    if (proposal.complete && proposalHasNoChanges(proposal)) {
+                        log(proposal.summary || "The agent reports the model is complete.", "success");
+                        updateAgentStatus("Model complete", "success");
+                        break;
+                    }
+                    log(`Proposal ready: ${proposalChangeCount(proposal)} exact change(s).`, "critique");
+                    const review = await showChangeReview(proposal);
+                    if (review.decision === "stop") {
+                        state.stopRequested = true;
+                        log("Proposal rejected. Agent stopped without applying it.", "system");
+                        break;
+                    }
+                    if (review.decision === "revise") {
+                        state.revisionNotes = review.feedback || "The proposal was rejected. Produce a materially improved alternative while preserving the current model.";
+                        log("Proposal rejected. Requesting a revised proposal without changing the model.", "system");
+                        continue;
+                    }
+                    state.revisionNotes = "";
+                    updateAgentStatus("Applying approved changes", "working");
+                    await applyProposal(proposal);
+                    log("Approved changes applied. Beginning the next quality pass; use Stop at any time.", "success");
+                    await sleep(250);
                 }
-
-                setStatus("Process Finished.", false);
-
             } catch (error) {
-                console.error(error);
-                alert("Error: " + error.message);
+                if (error.name === "AbortError" || state.stopRequested) {
+                    log("Agent request cancelled.", "system");
+                    updateAgentStatus("Stopped", "success");
+                } else {
+                    console.error(error);
+                    log(error.message, "error");
+                    updateAgentStatus("Error occurred", "error");
+                }
             } finally {
-                isGenerating = false;
-                document.getElementById('generateBtn').disabled = false;
-                document.getElementById('loadingSpinner').classList.add('hidden');
-                document.getElementById('btnIcon').classList.remove('hidden');
+                hideChangeReview();
+                state.currentAbortController = null;
+                setGeneratingUI(false);
+                if (state.stopRequested) updateAgentStatus("Stopped by user", "success");
             }
         }
 
-        async function runGenerationStep(apiKey, promptStr) {
+        function stopAgent(reason = "Stopped.") {
+            if (!state.generating) return;
+            state.stopRequested = true;
+            state.currentAbortController?.abort();
+            if (state.reviewResolve) {
+                const resolve = state.reviewResolve;
+                state.reviewResolve = null;
+                resolve({ decision: "stop", feedback: "" });
+            }
+            hideChangeReview();
+            log(reason, "system");
+            updateAgentStatus("Stopping", "waiting");
+        }
+
+        async function requestProposal(apiKey) {
             renderer.render(scene, camera);
-            const imageBase64 = renderer.domElement.toDataURL('image/jpeg', 0.5).split(',')[1];
-            
-            // Serialize current state
-            const currentBlocks = Object.values(aiBlocks).map(b => b.data);
-            const isInitial = (currentBlocks.length === 0);
+            const renderBase64 = renderer.domElement.toDataURL("image/jpeg", 0.72).split(",")[1];
+            const currentState = compactModelState();
+            const referenceSummary = state.uploadedAssets.map((asset) => ({ name: asset.name, kind: asset.kind, width: asset.width, height: asset.height, summary: asset.summary?.slice(0, 10000) })).slice(0, 20);
+            const systemPrompt = buildSystemPrompt();
+            const parts = [{
+                text: `USER REQUEST:\n${state.originalPrompt}\n\nREVISION NOTES FROM USER:\n${state.revisionNotes || "None"}\n\nCURRENT EDITABLE MODEL STATE:\n${JSON.stringify(currentState)}\n\nUPLOADED ASSET INDEX:\n${JSON.stringify(referenceSummary)}\n\nThe next image is the current 3D viewport render.`
+            }, { inlineData: { mimeType: "image/jpeg", data: renderBase64 } }];
 
-            const systemPrompt = `You are a Master Blockbench 3D Entity Modeler and Animator.
-You operate in a voxel grid. Y is up. Ground is Y=0. Floats (e.g. 0.5) allowed.
-
-CRITICAL DIRECTIVES:
-1. HIERARCHY (BONES): Every cube must belong to a "bone". Bones act as groups and pivot points. 
-   Define bones in the 'bones' object. (e.g., "head": { "pivot": [0,24,0], "parent": "body" }).
-2. ANIMATIONS: You MUST write Blockbench-compatible animations if requested (e.g., walk, idle, run).
-   An animation modifies bone rotations over time.
-   Format: "animations": [{ "name": "walk", "loop": "loop", "length": 1.0, "anim_bones": { "leg_l": { "rotation": { "0.0": [0,0,0], "0.5": [30,0,0], "1.0": [0,0,0] } } } }]
-3. CUBES: Coordinates (x,y,z) are the CENTER of the cube. w,h,d are full dimensions. rx,ry,rz are cube-specific rotations (usually 0, use bone rotation for limbs).
-4. NO SCENERY: Only build the entity. No floors, no blood puddles on the ground.
-
-Task: ${isInitial ? `Create the initial entity, bones, and animations for: "${promptStr}"` : `Review the current image. Fix, edit, or add missing details/animations for: "${promptStr}". Output empty actions/animations if perfect.`}`;
-
-            // Complex Schema combining Bones, Cubes, and Animations
-            const schema = {
-                type: "OBJECT",
-                properties: {
-                    texture_size: { type: "NUMBER", description: "64, 128, or 256" },
-                    bones: {
-                        type: "OBJECT",
-                        description: "Dictionary of bones. Key is bone name.",
-                        additionalProperties: {
-                            type: "OBJECT",
-                            properties: {
-                                pivot: { type: "ARRAY", items: { type: "NUMBER" }, description: "[x,y,z] pivot point" },
-                                rotation: { type: "ARRAY", items: { type: "NUMBER" } },
-                                parent: { type: "STRING", description: "Name of parent bone, or null" }
-                            }
-                        }
-                    },
-                    actions: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                action: { type: "STRING", description: "'add', 'remove', 'update'" },
-                                id: { type: "STRING" }, name: { type: "STRING" }, bone: { type: "STRING", description: "Must match a bone key" },
-                                x: { type: "NUMBER" }, y: { type: "NUMBER" }, z: { type: "NUMBER" },
-                                w: { type: "NUMBER" }, h: { type: "NUMBER" }, d: { type: "NUMBER" },
-                                rx: { type: "NUMBER" }, ry: { type: "NUMBER" }, rz: { type: "NUMBER" },
-                                color: { type: "STRING" }
-                            },
-                            required: ["action", "id", "bone", "x", "y", "z", "w", "h", "d", "color"]
-                        }
-                    },
-                    animations: {
-                        type: "ARRAY",
-                        description: "List of generated animations",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                name: { type: "STRING" }, loop: { type: "STRING", description: "'loop', 'hold', or 'once'" }, length: { type: "NUMBER" },
-                                anim_bones: {
-                                    type: "OBJECT",
-                                    description: "Keys are bone names. Values contain rotation keyframes.",
-                                    additionalProperties: {
-                                        type: "OBJECT",
-                                        properties: {
-                                            rotation: {
-                                                type: "OBJECT",
-                                                description: "Keys are time strings (e.g. '0.0', '0.5'). Values are [x,y,z] arrays.",
-                                                additionalProperties: { type: "ARRAY", items: { type: "NUMBER" } }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                required: ["texture_size", "bones", "actions"]
-            };
-
-            const payloadParts = [
-                { text: `Prompt: ${originalPrompt}\nCurrent Blocks:\n${JSON.stringify(currentBlocks)}` },
-                { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
-            ];
-            if (uploadedImageBase64) {
-                payloadParts.push({ text: "Reference Image provided by user:" });
-                payloadParts.push({ inlineData: { mimeType: "image/jpeg", data: uploadedImageBase64 } });
+            if (state.textureReady && state.cachedTextureDataUrl) {
+                const texturePayload = splitDataUrl(state.cachedTextureDataUrl);
+                parts.push({ text: "Current editable texture atlas:" });
+                parts.push({ inlineData: { mimeType: texturePayload.mime, data: texturePayload.data } });
+            }
+            const imageAssets = state.uploadedAssets.filter((asset) => asset.kind === "image").slice(0, 4);
+            for (const asset of imageAssets) {
+                const payload = splitDataUrl(asset.aiDataUrl || asset.dataUrl);
+                parts.push({ text: `Uploaded visual reference: ${asset.name}` });
+                parts.push({ inlineData: { mimeType: payload.mime, data: payload.data } });
             }
 
             const payload = {
-                contents: [{ role: "user", parts: payloadParts }],
+                contents: [{ role: "user", parts }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
-            };
-
-            const urlModelName = selectedModelString.replace('models/', '');
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${urlModelName}:generateContent?key=${apiKey}`;
-            
-            const response = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!rawText) throw new Error("API failed to return JSON.");
-            
-            const result = JSON.parse(rawText);
-            
-            if (result.actions.length === 0 && (!result.animations || result.animations.length === 0)) {
-                return { type: 'complete' };
-            }
-            return { type: 'needs_approval', data: result };
-        }
-
-        function populateReviewModal(data) {
-            const blocksList = document.getElementById('review-blocks-list');
-            const bonesList = document.getElementById('review-bones-list');
-            const animsList = document.getElementById('review-anims-list');
-            
-            blocksList.innerHTML = '';
-            bonesList.innerHTML = '';
-            animsList.innerHTML = '';
-
-            // Actions
-            let actionHtml = '';
-            data.actions.forEach(a => {
-                let color = a.action === 'add' ? 'text-green-400' : a.action === 'remove' ? 'text-red-400' : 'text-yellow-400';
-                actionHtml += `<li><span class="${color}">[${a.action.toUpperCase()}]</span> ${a.name || a.id} -> <span class="text-gray-500">Bone: ${a.bone}</span></li>`;
-            });
-            blocksList.innerHTML = actionHtml || '<li>No geometry changes.</li>';
-
-            // Bones
-            let boneHtml = '';
-            if(data.bones) {
-                Object.keys(data.bones).forEach(bName => {
-                    let parent = data.bones[bName].parent || 'root';
-                    boneHtml += `<li><span class="text-purple-400">${bName}</span> <span class="text-gray-500">(Parent: ${parent})</span></li>`;
-                });
-            }
-            bonesList.innerHTML = boneHtml || '<li>No bones defined.</li>';
-
-            // Animations
-            let animHtml = '';
-            if(data.animations && data.animations.length > 0) {
-                data.animations.forEach(an => {
-                    let bCount = Object.keys(an.anim_bones || {}).length;
-                    animHtml += `<li><span class="text-green-400">${an.name}</span> <span class="text-gray-500">(${an.length}s, ${an.loop}, ${bCount} bones animated)</span></li>`;
-                });
-            }
-            animsList.innerHTML = animHtml || '<li>No new animations generated.</li>';
-        }
-
-        async function applyStateRealtime(data) {
-            if(data.texture_size) atlasW = atlasH = data.texture_size;
-            if(data.bones) aiBones = { ...aiBones, ...data.bones };
-            
-            // Overwrite animations completely for simplicity, or append if desired. 
-            // We will replace to avoid duplicates with same names.
-            if(data.animations && data.animations.length > 0) {
-                aiAnimations = data.animations; 
-            }
-
-            for (const cmd of data.actions) {
-                cmd.rx = cmd.rx || 0; cmd.ry = cmd.ry || 0; cmd.rz = cmd.rz || 0;
-                
-                if (cmd.action === 'add' || cmd.action === 'update') {
-                    aiBlocks[cmd.id] = { data: cmd, meshGroup: null };
-                } else if (cmd.action === 'remove') {
-                    delete aiBlocks[cmd.id];
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: proposalSchema(),
+                    temperature: state.deepThinking ? 0.55 : 0.35
                 }
-            }
-
-            rebuildThreeScene();
+            };
+            const modelName = state.selectedModel.replace("models/", "");
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            state.currentAbortController = new AbortController();
+            const response = await fetchWithRetry(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                signal: state.currentAbortController.signal
+            });
+            const raw = response.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+            if (!raw) throw new Error("The model returned an empty response.");
+            let parsed;
+            try { parsed = JSON.parse(raw); }
+            catch { throw new Error("The model returned invalid proposal JSON."); }
+            return normalizeProposal(parsed);
         }
 
-        function rebuildThreeScene() {
-            // 1. Clear existing meshes
-            while(scene.children.length > 0){ 
-                const child = scene.children[0];
-                if(child.type === "Group" && child.userData.isAIBone) scene.remove(child);
-                else if(child.type === "Mesh" && child.userData.isAIGeo) scene.remove(child);
-                else break; // Break if we hit lighting/grid (assuming they were added first, actually let's just clear specific meshes)
-            }
-            // Better clear:
-            scene.children.forEach(c => {
-                if(c.userData.isAIBone || c.userData.isAIGeo) scene.remove(c);
-            });
+        function buildSystemPrompt() {
+            return `You are an expert Blockbench and Minecraft Bedrock entity modeler, texture artist, rigger, and animator. You do not directly mutate the project. You propose a precise transaction that the user reviews first.
 
-            // 2. We don't necessarily need to render the bone hierarchy perfectly in ThreeJS just for preview.
-            // Rendering flat meshes at their absolute positions is safer for the preview. The hierarchy is for export.
-            Object.values(aiBlocks).forEach(bObj => {
-                const b = bObj.data;
-                const geometry = new THREE.BoxGeometry(b.w, b.h, b.d);
-                const material = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.8 });
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.userData.isAIGeo = true;
+NON-NEGOTIABLE MODELING RULES:
+1. Build only the requested entity/item, never scenery or a floor.
+2. Every cube MUST have a unique semantic snake_case id and name. Never use generic names like cube1, part, group, or block.
+3. Every cube MUST belong to the correct semantic bone. Create an animation-friendly bone hierarchy with meaningful snake_case names such as body, head, left_front_leg, jaw, tail_base.
+4. Bone pivots must be placed at real joints. Parent/child relationships must support clean animation.
+5. The entity must stand on Y=0 unless the prompt explicitly requires otherwise.
+6. Use connected geometry, sensible proportions, symmetry where appropriate, and no accidental floating cubes.
+7. Coordinates x/y/z are cube CENTERS. w/h/d are full dimensions. Rotation values are degrees. px/py/pz are cube rotation pivots.
+8. Preserve useful uploaded geometry, textures, naming, UVs, and animations unless the user requests replacement.
 
-                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x000, opacity: 0.3, transparent: true }));
-                mesh.add(edges);
+ANIMATION RULES:
+1. Create and maintain a complete prompt-appropriate animation set, not just geometry.
+2. For an animal such as a sheep, normally include idle, walk, run, and graze/eat animations. Add other prompt-relevant actions when useful.
+3. For humanoids, normally include idle, walk, and run plus requested actions. For objects, create only mechanically meaningful animations.
+4. Animate bones, not individual unnamed cubes. Keyframes use seconds and degree rotations.
+5. Use seamless first/last poses for looping animations. Keep motion physically coherent and avoid clipping.
 
-                // For basic preview, just put the cube where the LLM said it belongs.
-                mesh.position.set(b.x, b.y, b.z);
-                
-                // If it has specific cube rotation (rare), apply it. 
-                // We ignore bone rotation in the static preview to prevent complex matrix math issues here.
-                mesh.rotation.order = "ZYX";
-                mesh.rotation.set(b.rx * (Math.PI/180), b.ry * (Math.PI/180), b.rz * (Math.PI/180));
-                
-                mesh.castShadow = true; mesh.receiveShadow = true;
-                scene.add(mesh);
-                bObj.meshGroup = mesh;
-            });
+TEXTURE RULES:
+1. Uploaded images may be visual references or the editable active texture. Propose pixel operations when texture edits are needed.
+2. Supported texture actions are resize, clear, fill_rect, outline_rect, set_pixel, tint_rect, and noise_rect.
+3. Preserve the existing texture unless a change is necessary. UV coordinates are atlas pixel coordinates.
+4. Use readable Minecraft-style texture detail and coherent material colors.
 
-            updateCounters();
+ITERATION RULES:
+1. There is NO iteration limit. The user controls when the process stops.
+2. If the current model fully satisfies the request, set complete=true and return no actions.
+3. Otherwise set complete=false and include only concrete necessary actions.
+4. Never claim completion while required bones, semantic cube names, prompt-appropriate animations, or texture work are missing.
+5. A rejected proposal is not applied. Use revision notes to generate a better alternative.
+6. Remove actions need only action and id. Add/update actions must contain enough complete data to apply safely.
+7. Return JSON only, matching the schema exactly.`;
         }
 
-        function buildAtlas() {
-            const canvas = document.getElementById('texture-canvas');
-            const ctx = canvas.getContext('2d');
-            let texW = atlasW, texH = atlasH, currentX = 0, currentY = 0, rowH = 0;
-            
-            let blockArray = Object.values(aiBlocks);
-            blockArray.sort((a, b) => (b.data.w * b.data.h * b.data.d) - (a.data.w * a.data.h * a.data.d));
+        function proposalSchema() {
+            const vector = { type: "ARRAY", items: { type: "NUMBER" } };
+            const keyframe = {
+                type: "OBJECT",
+                properties: { time: { type: "NUMBER" }, rotation: vector, position: vector, scale: vector, interpolation: { type: "STRING", enum: ["linear", "catmullrom", "step"] } },
+                required: ["time"]
+            };
+            return {
+                type: "OBJECT",
+                properties: {
+                    complete: { type: "BOOLEAN" },
+                    summary: { type: "STRING" },
+                    texture_width: { type: "NUMBER" },
+                    texture_height: { type: "NUMBER" },
+                    bone_actions: { type: "ARRAY", items: { type: "OBJECT", properties: { action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, parent: { type: "STRING" }, pivot: vector, rotation: vector }, required: ["action", "id"] } },
+                    cube_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                        action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, bone: { type: "STRING" },
+                        x: { type: "NUMBER" }, y: { type: "NUMBER" }, z: { type: "NUMBER" }, w: { type: "NUMBER" }, h: { type: "NUMBER" }, d: { type: "NUMBER" },
+                        rx: { type: "NUMBER" }, ry: { type: "NUMBER" }, rz: { type: "NUMBER" }, px: { type: "NUMBER" }, py: { type: "NUMBER" }, pz: { type: "NUMBER" },
+                        color: { type: "STRING" }, uv_x: { type: "NUMBER" }, uv_y: { type: "NUMBER" }, mirror: { type: "BOOLEAN" }, inflate: { type: "NUMBER" }
+                    }, required: ["action", "id"] } },
+                    animation_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                        action: { type: "STRING", enum: ["add", "update", "remove"] }, id: { type: "STRING" }, name: { type: "STRING" }, length: { type: "NUMBER" }, loop: { type: "BOOLEAN" },
+                        bones: { type: "ARRAY", items: { type: "OBJECT", properties: { bone: { type: "STRING" }, keyframes: { type: "ARRAY", items: keyframe } }, required: ["bone", "keyframes"] } }
+                    }, required: ["action", "id"] } },
+                    texture_actions: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                        action: { type: "STRING", enum: ["resize", "clear", "fill_rect", "outline_rect", "set_pixel", "tint_rect", "noise_rect"] },
+                        x: { type: "NUMBER" }, y: { type: "NUMBER" }, w: { type: "NUMBER" }, h: { type: "NUMBER" }, color: { type: "STRING" }, opacity: { type: "NUMBER" }, amount: { type: "NUMBER" }, width: { type: "NUMBER" }, height: { type: "NUMBER" }
+                    }, required: ["action"] } }
+                },
+                required: ["complete", "summary", "bone_actions", "cube_actions", "animation_actions", "texture_actions"]
+            };
+        }
 
-            blockArray.forEach(bObj => {
-                const b = bObj.data;
-                let bw = Math.max(1, Math.ceil(b.w)), bh = Math.max(1, Math.ceil(b.h)), bd = Math.max(1, Math.ceil(b.d));
-                let uvW = (bd * 2) + (bw * 2), uvH = bd + bh;
+        function normalizeProposal(raw) {
+            const boneActions = normalizeActionArray(raw.bone_actions).map((item) => {
+                const id = normalizeId(item.id);
+                if (item.action === "remove") return { action: "remove", id };
+                return { action: item.action, ...normalizedBone({ ...item, id }, state.bones[id] || null) };
+            });
+            const cubeActions = normalizeActionArray(raw.cube_actions).map((item) => {
+                const id = normalizeId(item.id);
+                if (item.action === "remove") return { action: "remove", id };
+                return { action: item.action, ...normalizedCube({ ...item, id }, state.cubes[id] || null) };
+            });
+            const animationActions = normalizeActionArray(raw.animation_actions).map((item) => {
+                const id = normalizeId(item.id);
+                if (item.action === "remove") return { action: "remove", id };
+                return { action: item.action, ...normalizedAnimation({ ...item, id }, state.animations[id] || null) };
+            });
+            const textureActions = (Array.isArray(raw.texture_actions) ? raw.texture_actions : []).filter((item) => item && item.action).map((item) => ({
+                action: item.action,
+                ...(item.x !== undefined ? { x: number(item.x) } : {}),
+                ...(item.y !== undefined ? { y: number(item.y) } : {}),
+                ...(item.w !== undefined ? { w: number(item.w, 1) } : {}),
+                ...(item.h !== undefined ? { h: number(item.h, 1) } : {}),
+                ...(item.width !== undefined ? { width: number(item.width, state.textureWidth) } : {}),
+                ...(item.height !== undefined ? { height: number(item.height, state.textureHeight) } : {}),
+                ...(item.color !== undefined ? { color: validColor(item.color) } : {}),
+                ...(item.opacity !== undefined ? { opacity: Math.max(0, Math.min(1, number(item.opacity, 1))) } : {}),
+                ...(item.amount !== undefined ? { amount: Math.max(0, number(item.amount)) } : {})
+            }));
+            return {
+                complete: Boolean(raw.complete),
+                summary: String(raw.summary || "AI proposal"),
+                texture_width: Math.max(1, Math.min(2048, number(raw.texture_width, state.textureWidth))),
+                texture_height: Math.max(1, Math.min(2048, number(raw.texture_height, state.textureHeight))),
+                bone_actions: boneActions,
+                cube_actions: cubeActions,
+                animation_actions: animationActions,
+                texture_actions: textureActions
+            };
+        }
 
-                if (currentX + uvW > texW) { currentX = 0; currentY += rowH; rowH = 0; }
-                if (currentY + uvH > texH) { texH = Math.max(256, texH * 2); if (texW < texH) texW = texH; }
+        function normalizeActionArray(value) {
+            return Array.isArray(value) ? value.filter((item) => item && ["add", "update", "remove"].includes(item.action) && item.id) : [];
+        }
 
-                b.uv_x = currentX; b.uv_y = currentY; b.uv_w = uvW; b.uv_h = uvH;
-                currentX += uvW; rowH = Math.max(rowH, uvH);
+        function validateProposal(proposal) {
+            const issues = [];
+            const genericName = /^(cube|part|block|group|bone|element|object|animation)(?:[_-]?\d+)?$/i;
+            const futureBones = Object.fromEntries(Object.entries(state.bones).map(([id, bone]) => [id, { ...bone }]));
+            const futureCubes = Object.fromEntries(Object.entries(state.cubes).map(([id, cube]) => [id, { ...cube }]));
+            const futureAnimations = Object.fromEntries(Object.entries(state.animations).map(([id, animation]) => [id, structuredCloneSafe(animation)]));
+
+            proposal.bone_actions.forEach((action) => {
+                if (action.action === "remove") delete futureBones[action.id];
+                else futureBones[action.id] = { ...action };
+            });
+            proposal.cube_actions.forEach((action) => {
+                if (action.action === "remove") delete futureCubes[action.id];
+                else futureCubes[action.id] = { ...action };
+            });
+            proposal.animation_actions.forEach((action) => {
+                if (action.action === "remove") delete futureAnimations[action.id];
+                else futureAnimations[action.id] = structuredCloneSafe(action);
             });
 
-            canvas.width = texW; canvas.height = texH;
-            ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0, 0, texW, texH);
+            Object.values(futureBones).forEach((bone) => {
+                if (bone.id !== "root" && genericName.test(bone.name)) issues.push(`Bone “${bone.id}” has a generic name (“${bone.name}”).`);
+                if (bone.parent && !futureBones[bone.parent]) issues.push(`Bone “${bone.name}” references missing parent “${bone.parent}”.`);
+            });
 
-            blockArray.forEach(bObj => {
-                const b = bObj.data;
-                ctx.fillStyle = b.color || '#ffffff'; ctx.fillRect(b.uv_x, b.uv_y, b.uv_w, b.uv_h);
-                // Procedural detail
-                for(let i=0; i<b.uv_w; i++) {
-                    for(let j=0; j<b.uv_h; j++) {
-                        if(i===0||j===0||i===b.uv_w-1||j===b.uv_h-1) { ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fillRect(b.uv_x+i, b.uv_y+j, 1, 1); }
-                        else if(Math.random()>0.8) { ctx.fillStyle=Math.random()>0.5?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)'; ctx.fillRect(b.uv_x+i, b.uv_y+j, 1, 1); }
+            const cubeNames = new Map();
+            Object.values(futureCubes).forEach((cube) => {
+                if (genericName.test(cube.name)) issues.push(`Cube “${cube.id}” has a generic name (“${cube.name}”).`);
+                if (!futureBones[cube.bone]) issues.push(`Cube “${cube.name}” references missing bone “${cube.bone}”.`);
+                const prior = cubeNames.get(cube.name);
+                if (prior && prior !== cube.id) issues.push(`Cube name “${cube.name}” is duplicated by “${prior}” and “${cube.id}”.`);
+                cubeNames.set(cube.name, cube.id);
+            });
+
+            Object.values(futureAnimations).forEach((animation) => {
+                if (genericName.test(animation.name)) issues.push(`Animation “${animation.id}” has a generic name (“${animation.name}”).`);
+                if (!Array.isArray(animation.bones) || !animation.bones.length) issues.push(`Animation “${animation.name}” contains no bone tracks.`);
+                (animation.bones || []).forEach((track) => {
+                    if (!futureBones[track.bone]) issues.push(`Animation “${animation.name}” references missing bone “${track.bone}”.`);
+                    if (!Array.isArray(track.keyframes) || !track.keyframes.length) issues.push(`Animation “${animation.name}” has an empty track for “${track.bone}”.`);
+                });
+            });
+
+            if (proposal.complete) {
+                if (!Object.keys(futureCubes).length) issues.push("The proposal claims completion but the model has no cubes.");
+                const required = requiredAnimationsForPrompt(state.originalPrompt);
+                const names = Object.values(futureAnimations).map((animation) => animation.name.toLowerCase());
+                required.forEach((alternatives) => {
+                    if (!alternatives.some((term) => names.some((name) => name.includes(term)))) issues.push(`The completed model is missing required animation: ${alternatives.join("/")}.`);
+                });
+            }
+            return [...new Set(issues)];
+        }
+
+        function requiredAnimationsForPrompt(prompt) {
+            const text = String(prompt || "").toLowerCase();
+            if (/\bsheep\b/.test(text)) return [["idle"], ["walk"], ["run"], ["graze", "eat"]];
+            if (/\b(cow|pig|goat|deer|horse|wolf|dog|cat|bear|lion|tiger|animal|creature)\b/.test(text)) return [["idle"], ["walk"], ["run"]];
+            if (/\b(humanoid|person|human|zombie|skeleton|villager|character)\b/.test(text)) return [["idle"], ["walk"], ["run"]];
+            return [];
+        }
+
+        function structuredCloneSafe(value) {
+            if (globalThis.structuredClone) return globalThis.structuredClone(value);
+            return JSON.parse(JSON.stringify(value));
+        }
+
+        function proposalHasNoChanges(proposal) {
+            return proposalChangeCount(proposal) === 0;
+        }
+
+        function proposalChangeCount(proposal) {
+            return proposal.bone_actions.length + proposal.cube_actions.length + proposal.animation_actions.length + proposal.texture_actions.length;
+        }
+
+        function compactModelState() {
+            return {
+                bones: Object.values(state.bones),
+                cubes: Object.values(state.cubes),
+                animations: Object.values(state.animations),
+                texture: { width: state.textureWidth, height: state.textureHeight, custom: state.textureCustom, available: state.textureReady }
+            };
+        }
+
+        function showChangeReview(proposal) {
+            $("reviewSummary").textContent = proposal.summary;
+            $("reviewIteration").textContent = `Iteration ${state.iteration}`;
+            $("reviewRawJson").textContent = JSON.stringify(proposal, null, 2);
+            $("revisionFeedback").value = "";
+            renderReviewStats(proposal);
+            renderReviewCards(proposal);
+            $("change-review-modal").classList.remove("modal-hidden");
+            updateAgentStatus("Awaiting exact-change approval", "waiting");
+            return new Promise((resolve) => { state.reviewResolve = resolve; });
+        }
+
+        function resolveReview(decision) {
+            if (!state.reviewResolve) return;
+            const resolve = state.reviewResolve;
+            state.reviewResolve = null;
+            const feedback = $("revisionFeedback").value.trim();
+            hideChangeReview();
+            resolve({ decision, feedback });
+        }
+
+        function hideChangeReview() {
+            $("change-review-modal").classList.add("modal-hidden");
+        }
+
+        function renderReviewStats(proposal) {
+            const container = $("reviewStats");
+            container.textContent = "";
+            const groups = [
+                ["Bones", proposal.bone_actions.length, "text-cyan-300"],
+                ["Cubes", proposal.cube_actions.length, "text-blue-300"],
+                ["Animations", proposal.animation_actions.length, "text-purple-300"],
+                ["Texture operations", proposal.texture_actions.length, "text-pink-300"]
+            ];
+            groups.forEach(([label, count, color]) => {
+                const badge = document.createElement("span");
+                badge.className = `glass-panel rounded-full px-3 py-1.5 text-xs ${color}`;
+                badge.textContent = `${count} ${label}`;
+                container.appendChild(badge);
+            });
+        }
+
+        function renderReviewCards(proposal) {
+            const container = $("reviewCards");
+            container.textContent = "";
+            const definitions = [
+                ["Bone", proposal.bone_actions, state.bones, "network"],
+                ["Cube", proposal.cube_actions, state.cubes, "cuboid"],
+                ["Animation", proposal.animation_actions, state.animations, "activity"],
+                ["Texture", proposal.texture_actions, null, "palette"]
+            ];
+            let rendered = 0;
+            definitions.forEach(([label, actions, current, iconName]) => {
+                actions.forEach((action, index) => {
+                    rendered++;
+                    const card = document.createElement("div");
+                    card.className = "review-card glass-panel rounded-xl overflow-hidden";
+                    const header = document.createElement("div");
+                    header.className = "px-4 py-3 border-b border-white/10 flex items-center gap-2";
+                    const icon = document.createElement("i");
+                    icon.dataset.lucide = iconName;
+                    icon.className = "w-4 h-4 text-gray-300";
+                    const title = document.createElement("b");
+                    title.className = "text-sm";
+                    title.textContent = `${action.action.toUpperCase()} ${label}: ${action.name || action.id || `operation_${index + 1}`}`;
+                    header.append(icon, title);
+                    const body = document.createElement("div");
+                    body.className = "p-4 grid grid-cols-1 xl:grid-cols-2 gap-3";
+                    if (current && action.action !== "add") {
+                        const before = makeJsonPanel("Current value", current[normalizeId(action.id)] || null, "text-gray-400");
+                        body.appendChild(before);
+                    }
+                    body.appendChild(makeJsonPanel(action.action === "remove" ? "Removal request" : "Proposed value", action, action.action === "remove" ? "text-red-300" : "text-green-300"));
+                    card.append(header, body);
+                    container.appendChild(card);
+                });
+            });
+            if (!rendered) {
+                const empty = document.createElement("div");
+                empty.className = "glass-panel rounded-xl p-6 text-center text-gray-400";
+                empty.textContent = "The AI marked this project complete and proposed no changes.";
+                container.appendChild(empty);
+            }
+            lucide.createIcons({ root: container });
+        }
+
+        function makeJsonPanel(title, value, titleClass) {
+            const wrapper = document.createElement("div");
+            const heading = document.createElement("div");
+            heading.className = `text-[10px] uppercase tracking-wider mb-1.5 ${titleClass}`;
+            heading.textContent = title;
+            const pre = document.createElement("pre");
+            pre.className = "bg-black/35 border border-white/5 rounded-lg p-3 text-[10px] text-gray-300 overflow-auto max-h-[270px]";
+            pre.textContent = JSON.stringify(value, null, 2);
+            wrapper.append(heading, pre);
+            return wrapper;
+        }
+
+        async function applyProposal(proposal) {
+            applyBoneActions(proposal.bone_actions);
+            applyCubeActions(proposal.cube_actions);
+            applyAnimationActions(proposal.animation_actions);
+            state.textureWidth = proposal.texture_width || state.textureWidth;
+            state.textureHeight = proposal.texture_height || state.textureHeight;
+            if (!state.textureCustom && (proposal.cube_actions.length || !state.textureReady)) compileProceduralTexture();
+            if (proposal.texture_actions.length) applyTextureActions(proposal.texture_actions);
+            refreshTextureCache();
+            updateStats();
+            fitCameraToModel();
+            await sleep(80);
+        }
+
+        function applyBoneActions(actions) {
+            actions.filter((action) => action.action === "remove").forEach((action) => {
+                const id = normalizeId(action.id);
+                if (id === "root") return;
+                delete state.bones[id];
+                Object.values(state.cubes).forEach((cube) => { if (cube.bone === id) cube.bone = "root"; });
+                Object.values(state.bones).forEach((bone) => { if (bone.parent === id) bone.parent = ""; });
+                log(`Removed bone: ${id}`, "command");
+            });
+            actions.filter((action) => action.action !== "remove").forEach((action) => {
+                const requestedId = normalizeId(action.id);
+                const existing = state.bones[requestedId] || null;
+                const bone = normalizedBone(action, existing);
+                if (bone.parent && !state.bones[bone.parent] && !actions.some((item) => normalizeId(item.id) === bone.parent && item.action !== "remove")) bone.parent = "";
+                state.bones[bone.id] = bone;
+                log(`${existing ? "Updated" : "Added"} bone: ${bone.name}`, "command");
+            });
+            ensureRootBone();
+        }
+
+        function applyCubeActions(actions) {
+            actions.filter((action) => action.action === "remove").forEach((action) => {
+                const id = normalizeId(action.id);
+                removeCubeMesh(id);
+                delete state.cubes[id];
+                log(`Removed cube: ${id}`, "command");
+            });
+            actions.filter((action) => action.action !== "remove").forEach((action) => {
+                const requestedId = normalizeId(action.id);
+                const existing = state.cubes[requestedId] || null;
+                const cube = normalizedCube(action, existing);
+                if (!state.bones[cube.bone]) {
+                    state.bones[cube.bone] = normalizedBone({ id: cube.bone, name: cube.bone, parent: "root", pivot: [cube.px, cube.py, cube.pz] });
+                    log(`Created missing semantic bone: ${cube.bone}`, "command");
+                }
+                if (!existing && state.cubes[cube.id]) cube.id = uniqueId(cube.id, state.cubes);
+                state.cubes[cube.id] = cube;
+                createCubeMesh(cube);
+                log(`${existing ? "Updated" : "Added"} cube: ${cube.name} → ${state.bones[cube.bone]?.name || cube.bone}`, "command");
+            });
+        }
+
+        function applyAnimationActions(actions) {
+            actions.filter((action) => action.action === "remove").forEach((action) => {
+                const id = normalizeId(action.id);
+                delete state.animations[id];
+                log(`Removed animation: ${id}`, "command");
+            });
+            actions.filter((action) => action.action !== "remove").forEach((action) => {
+                const id = normalizeId(action.id);
+                const existing = state.animations[id] || null;
+                const animation = normalizedAnimation(action, existing);
+                animation.bones = animation.bones.filter((track) => state.bones[track.bone]);
+                state.animations[animation.id] = animation;
+                log(`${existing ? "Updated" : "Added"} animation: ${animation.name}`, "command");
+            });
+        }
+
+        function applyTextureActions(actions) {
+            const canvas = $("texture-preview-canvas");
+            if (!state.textureReady) compileProceduralTexture();
+            const ctx = canvas.getContext("2d");
+            actions.forEach((action) => {
+                const type = action.action;
+                if (type === "resize") {
+                    resizeTexture(number(action.width, canvas.width), number(action.height, canvas.height));
+                    return;
+                }
+                const x = Math.floor(number(action.x));
+                const y = Math.floor(number(action.y));
+                const w = Math.max(1, Math.floor(number(action.w, 1)));
+                const h = Math.max(1, Math.floor(number(action.h, 1)));
+                const color = validColor(action.color, "#ffffff");
+                const opacity = Math.max(0, Math.min(1, number(action.opacity, 1)));
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                ctx.imageSmoothingEnabled = false;
+                if (type === "clear") ctx.clearRect(0, 0, canvas.width, canvas.height);
+                else if (type === "fill_rect") { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+                else if (type === "outline_rect") { ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, Math.floor(number(action.amount, 1))); ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1)); }
+                else if (type === "set_pixel") { ctx.fillStyle = color; ctx.fillRect(x, y, 1, 1); }
+                else if (type === "tint_rect") { ctx.globalCompositeOperation = "source-atop"; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+                else if (type === "noise_rect") applyNoise(ctx, x, y, w, h, color, Math.max(0, Math.min(1, number(action.amount, 0.25))));
+                ctx.restore();
+                log(`Texture operation: ${type} (${x}, ${y}, ${w}, ${h})`, "command");
+            });
+            state.textureCustom = true;
+            state.textureReady = true;
+            refreshTextureCache();
+        }
+
+        function applyNoise(ctx, x, y, w, h, color, amount) {
+            const rgb = hexToRgb(color);
+            const startX = Math.max(0, Math.min(ctx.canvas.width - 1, x));
+            const startY = Math.max(0, Math.min(ctx.canvas.height - 1, y));
+            const safeWidth = Math.max(1, Math.min(w, ctx.canvas.width - startX));
+            const safeHeight = Math.max(1, Math.min(h, ctx.canvas.height - startY));
+            const image = ctx.getImageData(startX, startY, safeWidth, safeHeight);
+            for (let i = 0; i < image.data.length; i += 4) {
+                if (Math.random() > amount) continue;
+                image.data[i] = Math.round((image.data[i] + rgb.r) / 2);
+                image.data[i + 1] = Math.round((image.data[i + 1] + rgb.g) / 2);
+                image.data[i + 2] = Math.round((image.data[i + 2] + rgb.b) / 2);
+            }
+            ctx.putImageData(image, startX, startY);
+        }
+
+        function resizeTexture(width, height) {
+            width = Math.max(1, Math.min(2048, Math.round(width)));
+            height = Math.max(1, Math.min(2048, Math.round(height)));
+            const canvas = $("texture-preview-canvas");
+            const temp = document.createElement("canvas");
+            temp.width = canvas.width;
+            temp.height = canvas.height;
+            temp.getContext("2d").drawImage(canvas, 0, 0);
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(temp, 0, 0, width, height);
+            state.textureWidth = width;
+            state.textureHeight = height;
+            state.textureReady = true;
+        }
+
+        function compileProceduralTexture() {
+            const canvas = $("texture-preview-canvas");
+            let width = nearestPowerOfTwo(Math.max(16, state.textureWidth));
+            let height = nearestPowerOfTwo(Math.max(16, state.textureHeight));
+            let x = 0, y = 0, rowHeight = 0;
+            const cubes = Object.values(state.cubes).sort((a, b) => b.w * b.h * b.d - a.w * a.h * a.d);
+            const placements = [];
+            cubes.forEach((cube) => {
+                const bw = Math.max(1, Math.ceil(cube.w));
+                const bh = Math.max(1, Math.ceil(cube.h));
+                const bd = Math.max(1, Math.ceil(cube.d));
+                const uvW = Math.max(2, 2 * (bw + bd));
+                const uvH = Math.max(2, bh + bd);
+                if (x + uvW > width) { x = 0; y += rowHeight; rowHeight = 0; }
+                while (y + uvH > height && height < 2048) height *= 2;
+                while (uvW > width && width < 2048) width *= 2;
+                cube.uv_x = x;
+                cube.uv_y = y;
+                placements.push({ cube, x, y, w: uvW, h: uvH });
+                x += uvW;
+                rowHeight = Math.max(rowHeight, uvH);
+            });
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, width, height);
+            placements.forEach(({ cube, x: px, y: py, w, h }) => {
+                ctx.fillStyle = cube.color;
+                ctx.fillRect(px, py, w, h);
+                const rgb = hexToRgb(cube.color);
+                for (let iy = 0; iy < h; iy++) {
+                    for (let ix = 0; ix < w; ix++) {
+                        const edge = ix === 0 || iy === 0 || ix === w - 1 || iy === h - 1;
+                        const jitter = edge ? -28 : ((hash(`${cube.id}:${ix}:${iy}`) % 19) - 9);
+                        ctx.fillStyle = `rgb(${clampByte(rgb.r + jitter)},${clampByte(rgb.g + jitter)},${clampByte(rgb.b + jitter)})`;
+                        ctx.fillRect(px + ix, py + iy, 1, 1);
                     }
                 }
             });
-            atlasBase64 = canvas.toDataURL('image/png');
+            state.textureWidth = width;
+            state.textureHeight = height;
+            state.textureReady = true;
+            state.textureCustom = false;
+            refreshTextureCache();
+            log(`Generated procedural atlas ${width}×${height}.`, "success");
         }
 
-        function exportBBModel() {
-            if (Object.keys(aiBlocks).length === 0) return alert("Nothing to export.");
-            buildAtlas();
+        function refreshTextureCache() {
+            const canvas = $("texture-preview-canvas");
+            if (!canvas.width || !canvas.height) return;
+            state.textureWidth = canvas.width;
+            state.textureHeight = canvas.height;
+            state.cachedTextureDataUrl = canvas.toDataURL("image/png");
+            state.textureReady = true;
+            $("texture-preview-container").style.display = "block";
+            $("texture-label-text").textContent = `TEXTURE: ${canvas.width}×${canvas.height}${state.textureCustom ? " • CUSTOM" : ""}`;
+            $("modalTexturePreview").src = state.cachedTextureDataUrl;
+        }
 
-            // 1. Compile Elements (Cubes)
-            const elements = Object.values(aiBlocks).map(bObj => {
-                const b = bObj.data;
-                const originX = b.x - (b.w / 2);
-                const originY = b.y - (b.h / 2);
-                const originZ = b.z - (b.d / 2);
-                
-                // Construct standard 6 faces mapped to the box UV
-                const faces = {};
-                const dirs = ['north', 'east', 'south', 'west', 'up', 'down'];
-                dirs.forEach(d => faces[d] = { uv: [b.uv_x, b.uv_y, b.uv_w, b.uv_h], texture: 0 });
-
-                return {
-                    name: b.name,
-                    uuid: b.id,
-                    from: [originX, originY, originZ],
-                    to: [originX + b.w, originY + b.h, originZ + b.d],
-                    rotation: [b.rx, b.ry, b.rz],
-                    origin: [b.x, b.y, b.z], // cube's own center
-                    faces: faces
-                };
+        function fitCameraToModel() {
+            const cubes = Object.values(state.cubes);
+            if (!cubes.length) return;
+            const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+            const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+            cubes.forEach((cube) => {
+                min.min(new THREE.Vector3(cube.x - cube.w / 2, cube.y - cube.h / 2, cube.z - cube.d / 2));
+                max.max(new THREE.Vector3(cube.x + cube.w / 2, cube.y + cube.h / 2, cube.z + cube.d / 2));
             });
+            const center = min.clone().add(max).multiplyScalar(0.5);
+            const size = max.clone().sub(min).length();
+            controls.target.copy(center);
+            if (size > 0) camera.position.copy(center.clone().add(new THREE.Vector3(size * 1.05, size * 0.75, size * 1.05)));
+        }
 
-            // 2. Compile Outliner (Bones Hierarchy)
-            const boneUuids = {};
-            Object.keys(aiBones).forEach(name => boneUuids[name] = generateUUID());
+        function openExportModal() {
+            if (!Object.keys(state.cubes).length) return log("Nothing to export yet.", "error");
+            if (!state.textureReady) compileProceduralTexture();
+            const geo = buildGeoJson();
+            const animation = buildAnimationJson();
+            const bbmodel = buildBbmodel();
+            state.cachedGeoJson = JSON.stringify(geo, null, 2);
+            state.cachedAnimationJson = JSON.stringify(animation, null, 2);
+            state.cachedBbmodel = JSON.stringify(bbmodel, null, 2);
+            $("exportJsonTextarea").value = state.cachedGeoJson;
+            $("modalTexturePreview").src = state.cachedTextureDataUrl;
+            $("exportStats").textContent = `${Object.keys(state.bones).length} bones • ${Object.keys(state.cubes).length} cubes • ${Object.keys(state.animations).length} animations`;
+            $("export-modal").classList.remove("modal-hidden");
+            log("Prepared BBModel and complete asset bundle.", "system");
+        }
 
-            const outlinerMap = {};
-            // Init outliner objects
-            Object.keys(aiBones).forEach(name => {
-                const bd = aiBones[name];
-                outlinerMap[name] = {
-                    name: name,
-                    uuid: boneUuids[name],
-                    origin: bd.pivot || [0,0,0],
-                    rotation: bd.rotation || [0,0,0],
-                    children: []
-                };
+        function buildGeoJson() {
+            ensureRootBone();
+            const bones = orderedBones().map((bone) => {
+                const result = { name: bone.name, pivot: bone.pivot };
+                const parent = state.bones[bone.parent];
+                if (parent) result.parent = parent.name;
+                if (bone.rotation.some(Boolean)) result.rotation = bone.rotation;
+                const cubes = Object.values(state.cubes).filter((cube) => cube.bone === bone.id).map((cube) => {
+                    const item = {
+                        name: cube.name,
+                        origin: [round(cube.x - cube.w / 2), round(cube.y - cube.h / 2), round(cube.z - cube.d / 2)],
+                        size: [round(cube.w), round(cube.h), round(cube.d)],
+                        uv: [Math.round(cube.uv_x), Math.round(cube.uv_y)]
+                    };
+                    if ([cube.rx, cube.ry, cube.rz].some(Boolean)) {
+                        item.pivot = [round(cube.px), round(cube.py), round(cube.pz)];
+                        item.rotation = [round(cube.rx), round(cube.ry), round(cube.rz)];
+                    }
+                    if (cube.inflate) item.inflate = round(cube.inflate);
+                    if (cube.mirror) item.mirror = true;
+                    return item;
+                });
+                if (cubes.length) result.cubes = cubes;
+                return result;
             });
+            return {
+                format_version: "1.12.0",
+                "minecraft:geometry": [{
+                    description: {
+                        identifier: `geometry.${state.modelBaseName}`,
+                        texture_width: state.textureWidth,
+                        texture_height: state.textureHeight,
+                        visible_bounds_width: visibleBounds().width,
+                        visible_bounds_height: visibleBounds().height,
+                        visible_bounds_offset: visibleBounds().offset
+                    },
+                    bones
+                }]
+            };
+        }
 
-            // Assign cubes to bones
-            Object.values(aiBlocks).forEach(bObj => {
-                const b = bObj.data;
-                if(b.bone && outlinerMap[b.bone]) {
-                    outlinerMap[b.bone].children.push(b.id);
-                } else {
-                    // Fallback to a root bone if unassigned
-                    if(!outlinerMap["root"]) outlinerMap["root"] = { name: "root", uuid: generateUUID(), origin: [0,0,0], rotation: [0,0,0], children: [] };
-                    outlinerMap["root"].children.push(b.id);
-                }
-            });
-
-            // Nest bones based on parent
-            const outliner = [];
-            Object.keys(outlinerMap).forEach(name => {
-                const parent = aiBones[name]?.parent;
-                if(parent && outlinerMap[parent]) {
-                    outlinerMap[parent].children.push(outlinerMap[name]);
-                } else {
-                    outliner.push(outlinerMap[name]);
-                }
-            });
-
-            // 3. Compile Animations
-            const bbAnimations = aiAnimations.map(anim => {
-                const animators = {};
-                if(anim.anim_bones) {
-                    Object.keys(anim.anim_bones).forEach(bName => {
-                        const rotData = anim.anim_bones[bName].rotation;
-                        if(rotData) {
-                            const keyframes = [];
-                            Object.keys(rotData).forEach(timeStr => {
-                                keyframes.push({
-                                    channel: "rotation",
-                                    time: parseFloat(timeStr),
-                                    data_points: [{ x: rotData[timeStr][0], y: rotData[timeStr][1], z: rotData[timeStr][2] }]
-                                });
-                            });
-                            animators[boneUuids[bName] || generateUUID()] = { name: bName, keyframes: keyframes };
+        function buildAnimationJson() {
+            const animations = {};
+            Object.values(state.animations).forEach((animation) => {
+                const bones = {};
+                animation.bones.forEach((track) => {
+                    const boneName = state.bones[track.bone]?.name || track.bone;
+                    const channels = {};
+                    ["rotation", "position", "scale"].forEach((channel) => {
+                        const frames = track.keyframes.filter((frame) => frame[channel]);
+                        if (!frames.length) return;
+                        if (frames.length === 1 && frames[0].time === 0) channels[channel] = frames[0][channel].map(round);
+                        else {
+                            channels[channel] = {};
+                            frames.forEach((frame) => { channels[channel][formatTime(frame.time)] = frame[channel].map(round); });
                         }
                     });
-                }
+                    if (Object.keys(channels).length) bones[boneName] = channels;
+                });
+                animations[`animation.${state.modelBaseName}.${animation.name}`] = { loop: animation.loop, animation_length: round(animation.length), bones };
+            });
+            return { format_version: "1.8.0", animations };
+        }
 
+        function buildBbmodel() {
+            const boneUuid = {};
+            const cubeUuid = {};
+            orderedBones().forEach((bone) => { boneUuid[bone.id] = uuidFromString(`bone:${bone.id}`); });
+            Object.values(state.cubes).forEach((cube) => { cubeUuid[cube.id] = uuidFromString(`cube:${cube.id}`); });
+            const elements = Object.values(state.cubes).map((cube, index) => {
+                const from = [cube.x - cube.w / 2, cube.y - cube.h / 2, cube.z - cube.d / 2].map(round);
+                const to = [cube.x + cube.w / 2, cube.y + cube.h / 2, cube.z + cube.d / 2].map(round);
+                const faceUv = [cube.uv_x, cube.uv_y, cube.uv_x + Math.max(1, cube.w), cube.uv_y + Math.max(1, cube.h)].map(round);
+                const faces = {};
+                ["north", "east", "south", "west", "up", "down"].forEach((face) => { faces[face] = { uv: faceUv, texture: 0 }; });
                 return {
-                    uuid: generateUUID(),
-                    name: `animation.model.${anim.name}`,
-                    loop: anim.loop === 'loop' ? 'loop' : 'once',
-                    length: anim.length || 1.0,
-                    animators: animators
+                    name: cube.name,
+                    box_uv: true,
+                    rescale: false,
+                    locked: false,
+                    light_emission: 0,
+                    render_order: "default",
+                    allow_mirror_modeling: true,
+                    from,
+                    to,
+                    autouv: 0,
+                    color: index % 8,
+                    origin: [cube.px, cube.py, cube.pz].map(round),
+                    uv_offset: [round(cube.uv_x), round(cube.uv_y)],
+                    rotation: [cube.rx, cube.ry, cube.rz].map(round),
+                    faces,
+                    type: "cube",
+                    uuid: cubeUuid[cube.id]
                 };
             });
 
-            // 4. Final BBModel JSON
-            const bbmodel = {
-                meta: { format_version: "4.0", model_format: "free", box_uv: true },
-                name: "AI_Generated_Entity",
-                resolution: { width: atlasW, height: atlasH },
-                elements: elements,
-                outliner: outliner,
-                textures: [{
-                    id: "0", name: "atlas", folder: "block",
-                    source: atlasBase64 // Embed base64 directly
-                }],
-                animations: bbAnimations
-            };
+            const childGroups = {};
+            orderedBones().forEach((bone) => { childGroups[bone.id] = []; });
+            Object.values(state.cubes).forEach((cube) => { (childGroups[cube.bone] || childGroups.root).push(cubeUuid[cube.id]); });
+            orderedBones().forEach((bone) => { if (bone.parent && childGroups[bone.parent]) childGroups[bone.parent].push(makeOutlinerGroup(bone, childGroups, boneUuid)); });
+            const rootGroups = orderedBones().filter((bone) => !bone.parent || !state.bones[bone.parent]).map((bone) => makeOutlinerGroup(bone, childGroups, boneUuid));
 
-            // Trigger Download
-            const jsonStr = JSON.stringify(bbmodel);
-            const dataUri = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
-            const a = document.createElement('a');
-            a.href = dataUri; a.download = "ai_entity.bbmodel";
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            const bbAnimations = Object.values(state.animations).map((animation) => {
+                const animators = {};
+                animation.bones.forEach((track) => {
+                    const uuid = boneUuid[track.bone];
+                    if (!uuid) return;
+                    const keyframes = [];
+                    track.keyframes.forEach((frame) => {
+                        ["rotation", "position", "scale"].forEach((channel) => {
+                            if (!frame[channel]) return;
+                            keyframes.push({
+                                channel,
+                                data_points: [{ x: round(frame[channel][0]), y: round(frame[channel][1]), z: round(frame[channel][2]) }],
+                                uuid: uuidFromString(`${animation.id}:${track.bone}:${channel}:${frame.time}`),
+                                time: round(frame.time),
+                                color: -1,
+                                interpolation: frame.interpolation || "linear"
+                            });
+                        });
+                    });
+                    animators[uuid] = { name: state.bones[track.bone]?.name || track.bone, type: "bone", keyframes };
+                });
+                return {
+                    uuid: uuidFromString(`animation:${animation.id}`),
+                    name: `animation.${state.modelBaseName}.${animation.name}`,
+                    loop: animation.loop ? "loop" : "once",
+                    override: false,
+                    length: round(animation.length),
+                    snapping: 20,
+                    selected: false,
+                    anim_time_update: "",
+                    blend_weight: "",
+                    start_delay: "",
+                    loop_delay: "",
+                    animators
+                };
+            });
+
+            return {
+                meta: { format_version: "4.10", model_format: "bedrock", box_uv: true },
+                name: state.modelBaseName,
+                model_identifier: state.modelBaseName,
+                visible_box: [visibleBounds().width, visibleBounds().height, ...visibleBounds().offset],
+                variable_placeholders: "",
+                variable_placeholder_buttons: [],
+                timeline_setups: [],
+                unhandled_root_fields: { ai_modeler: { exported_at: new Date().toISOString(), includes_named_cubes: true, includes_bones: true, includes_animations: true, embedded_texture: true } },
+                resolution: { width: state.textureWidth, height: state.textureHeight },
+                elements,
+                outliner: rootGroups,
+                textures: [{
+                    path: `${state.modelBaseName}.png`,
+                    name: `${state.modelBaseName}.png`,
+                    folder: "",
+                    namespace: "",
+                    id: "0",
+                    particle: false,
+                    render_mode: "default",
+                    render_sides: "auto",
+                    frame_time: 1,
+                    frame_order_type: "loop",
+                    frame_interpolate: false,
+                    visible: true,
+                    internal: true,
+                    saved: false,
+                    uuid: uuidFromString("texture:main"),
+                    source: state.cachedTextureDataUrl
+                }],
+                animations: bbAnimations,
+                animation_variable_placeholders: "",
+                display: {},
+                groups: []
+            };
         }
 
+        function makeOutlinerGroup(bone, childGroups, boneUuid) {
+            return {
+                name: bone.name,
+                origin: bone.pivot.map(round),
+                rotation: bone.rotation.map(round),
+                color: 0,
+                uuid: boneUuid[bone.id],
+                export: true,
+                isOpen: true,
+                locked: false,
+                visibility: true,
+                autouv: 0,
+                children: childGroups[bone.id] || []
+            };
+        }
+
+        async function downloadBundle() {
+            if (typeof JSZip === "undefined") return alert("ZIP library did not load. Download the individual files instead.");
+            const zip = new JSZip();
+            zip.file(`${state.modelBaseName}.bbmodel`, state.cachedBbmodel);
+            zip.file(`${state.modelBaseName}.geo.json`, state.cachedGeoJson);
+            zip.file(`${state.modelBaseName}.animation.json`, state.cachedAnimationJson);
+            zip.file(`${state.modelBaseName}.png`, dataUrlToUint8Array(state.cachedTextureDataUrl));
+            zip.file("manifest.json", JSON.stringify({
+                name: state.modelBaseName,
+                generated_at: new Date().toISOString(),
+                cubes: Object.keys(state.cubes).length,
+                bones: Object.keys(state.bones).length,
+                animations: Object.keys(state.animations).length,
+                files: [`${state.modelBaseName}.bbmodel`, `${state.modelBaseName}.geo.json`, `${state.modelBaseName}.animation.json`, `${state.modelBaseName}.png`]
+            }, null, 2));
+            const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+            downloadBlob(`${state.modelBaseName}_complete.zip`, blob);
+        }
+
+        function downloadTexture() {
+            downloadBlob(`${state.modelBaseName}.png`, dataUrlToBlob(state.cachedTextureDataUrl));
+        }
+
+        async function copyGeometry() {
+            try {
+                await navigator.clipboard.writeText(state.cachedGeoJson);
+                log("Geometry JSON copied to clipboard.", "success");
+            } catch {
+                $("exportJsonTextarea").select();
+                document.execCommand("copy");
+                log("Geometry JSON copied with fallback clipboard support.", "success");
+            }
+        }
+
+        function downloadText(filename, text, type) {
+            if (!text) return;
+            downloadBlob(filename, new Blob([text], { type }));
+        }
+
+        function downloadBlob(filename, blob) {
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        async function fetchWithRetry(url, options, retries = 3) {
+            const delays = [800, 1800, 3500];
+            let lastError;
+            for (let attempt = 0; attempt < retries; attempt++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        const details = await response.json().catch(() => ({}));
+                        throw new Error(details.error?.message || `Gemini request failed (${response.status}).`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (error.name === "AbortError") throw error;
+                    lastError = error;
+                    if (attempt < retries - 1) await sleep(delays[attempt]);
+                }
+            }
+            throw lastError;
+        }
+
+        function orderedBones() {
+            const result = [];
+            const visited = new Set();
+            const visit = (bone) => {
+                if (!bone || visited.has(bone.id)) return;
+                if (bone.parent && state.bones[bone.parent]) visit(state.bones[bone.parent]);
+                visited.add(bone.id);
+                result.push(bone);
+            };
+            Object.values(state.bones).forEach(visit);
+            return result;
+        }
+
+        function visibleBounds() {
+            const cubes = Object.values(state.cubes);
+            if (!cubes.length) return { width: 2, height: 2, offset: [0, 1, 0] };
+            let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            cubes.forEach((cube) => {
+                minX = Math.min(minX, cube.x - cube.w / 2); maxX = Math.max(maxX, cube.x + cube.w / 2);
+                minY = Math.min(minY, cube.y - cube.h / 2); maxY = Math.max(maxY, cube.y + cube.h / 2);
+                minZ = Math.min(minZ, cube.z - cube.d / 2); maxZ = Math.max(maxZ, cube.z + cube.d / 2);
+            });
+            return { width: Math.ceil(Math.max(maxX - minX, maxZ - minZ) + 2), height: Math.ceil(maxY - minY + 2), offset: [round((minX + maxX) / 2), round((minY + maxY) / 2), round((minZ + maxZ) / 2)] };
+        }
+
+        function findBoneIdByName(name) {
+            const target = normalizeId(name);
+            return Object.values(state.bones).find((bone) => bone.id === target || bone.name === target)?.id || "";
+        }
+
+        function cryptoRandomId() {
+            if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+            return `asset_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        }
+
+        function uuidFromString(value) {
+            const source = String(value);
+            const parts = [0, 0, 0, 0];
+            for (let i = 0; i < source.length; i++) parts[i % 4] = Math.imul(parts[i % 4] ^ source.charCodeAt(i), 2654435761) >>> 0;
+            const hex = parts.map((part) => part.toString(16).padStart(8, "0")).join("");
+            return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+        }
+
+        function readFileDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error || new Error("File read failed."));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function imageDimensions(dataUrl) {
+            return loadImage(dataUrl).then((image) => ({ width: image.width, height: image.height }));
+        }
+
+        async function makeAiReferenceDataUrl(dataUrl, maxDimension = 768) {
+            const image = await loadImage(dataUrl);
+            const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+            if (scale === 1 && dataUrl.length < 1_500_000) return dataUrl;
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+            const ctx = canvas.getContext("2d");
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL("image/jpeg", 0.82);
+        }
+
+        function loadImage(source) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error("Image could not be decoded."));
+                image.src = source;
+            });
+        }
+
+        function splitDataUrl(dataUrl) {
+            const match = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl || "");
+            if (!match) throw new Error("Invalid image data URL.");
+            return { mime: match[1], data: match[2] };
+        }
+
+        function dataUrlToBlob(dataUrl) {
+            const payload = splitDataUrl(dataUrl);
+            return new Blob([dataUrlToUint8Array(dataUrl)], { type: payload.mime });
+        }
+
+        function dataUrlToUint8Array(dataUrl) {
+            const base64 = splitDataUrl(dataUrl).data;
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+
+        function colorForIndex(index) {
+            const palette = ["#b8b8b8", "#8da0b8", "#a98c78", "#8ea17f", "#a78da8", "#c0a56f", "#708b8f", "#b27b7b"];
+            return palette[index % palette.length];
+        }
+
+        function hexToRgb(hex) {
+            const clean = validColor(hex).slice(1);
+            return { r: parseInt(clean.slice(0, 2), 16), g: parseInt(clean.slice(2, 4), 16), b: parseInt(clean.slice(4, 6), 16) };
+        }
+
+        function hash(text) {
+            let value = 2166136261;
+            for (let i = 0; i < text.length; i++) value = Math.imul(value ^ text.charCodeAt(i), 16777619);
+            return value >>> 0;
+        }
+
+        function clampByte(value) { return Math.max(0, Math.min(255, Math.round(value))); }
+        function isPowerOfTwo(value) { return value > 0 && (value & (value - 1)) === 0; }
+        function nearestPowerOfTwo(value) { return Math.min(2048, 2 ** Math.ceil(Math.log2(Math.max(1, value)))); }
+        function round(value) { return Math.round(number(value) * 1000) / 1000; }
+        function formatTime(value) { return String(round(value)); }
+        function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+    })();
     </script>
 </body>
 </html>
