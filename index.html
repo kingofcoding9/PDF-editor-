@@ -2,670 +2,924 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>AR High-Detail Stream Scanner</title>
-    <!-- Tailwind CSS for UI -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Voxel Studio Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Three.js Import Map -->
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-        }
-      }
-    </script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background-color: #000; 
-            color: #fff; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            touch-action: none;
-        }
-        #webxr-canvas-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-        #dom-overlay { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            pointer-events: none; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: space-between; 
-            padding: 20px; 
-            padding-bottom: 40px;
-            box-sizing: border-box; 
-            z-index: 10; 
-        }
+        body { margin: 0; overflow: hidden; background-color: #1a1a24; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; outline: none; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
         .pointer-events-auto { pointer-events: auto; }
-        .hidden { display: none !important; }
+        .glass-panel { background: rgba(20, 20, 25, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glass-input { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.15); color: white; }
+        .glass-input:focus { border-color: rgba(96, 165, 250, 0.6); outline: none; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2); }
+        .modal { transition: opacity 0.2s, visibility 0.2s; }
+        .modal-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
         
-        button {
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        
+        .spinner { border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; border-top: 2px solid #60a5fa; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .toggle-checkbox:checked { right: 0; border-color: #8b5cf6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #8b5cf6; }
+        .toggle-checkbox { right: 4px; z-index: 1; transition: all 0.3s; }
+        .toggle-label { transition: all 0.3s; }
 
-        /* Scan reticle animation */
-        @keyframes pulse-ring {
-            0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-            100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-        }
-        .scanning-active #scan-indicator {
-            animation: pulse-ring 1s infinite;
-        }
+        .pulse-text { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+        
+        /* Upload & Previews */
+        #reference-preview { display: none; background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.2); }
+        
+        select option { background-color: #1a1a24; color: white; }
     </style>
 </head>
-<body>
+<body class="text-sm">
 
-    <!-- Startup / Error Screen -->
-    <div id="start-screen" class="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center z-50 p-6 text-center">
-        <div class="max-w-md w-full bg-gray-900 rounded-2xl shadow-2xl p-8 border border-gray-800">
-            <div class="flex justify-center mb-6">
-                <svg class="w-16 h-16 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
-                </svg>
-            </div>
-            <h1 class="text-3xl font-bold mb-3 text-white tracking-tight">HD Stream Scanner</h1>
-            <p class="text-gray-400 mb-8 text-sm leading-relaxed">
-                Utilizes <strong>Origin Private File System (OPFS)</strong> to stream high-density object details directly to disk in real-time. Capable of mapping massive environments without running out of memory.
-            </p>
-            
-            <div id="ar-status-container" class="min-h-[60px]">
-                <div class="text-gray-600 animate-pulse">Initializing Storage & WebXR...</div>
-            </div>
-        </div>
-    </div>
+    <div id="canvas-container"></div>
+    <canvas id="texture-canvas" style="display:none;"></canvas>
 
-    <!-- WebXR Canvas Container -->
-    <div id="webxr-canvas-container"></div>
-
-    <!-- AR Interface (DOM Overlay) -->
-    <div id="dom-overlay" class="hidden">
-        <!-- Top Header: Stats -->
+    <div id="ui-layer" class="p-4 flex flex-col justify-between">
+        
         <div class="flex justify-between items-start pointer-events-auto">
-            <div class="flex flex-col gap-2">
-                <div class="bg-black/80 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-800 shadow-lg flex items-center justify-between min-w-[140px]">
-                    <span class="text-xs text-green-400 uppercase tracking-wider font-semibold">Planes</span>
-                    <div id="plane-count" class="text-xl font-mono font-bold text-white">0</div>
+            <div class="flex gap-2 flex-col">
+                <div class="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-3 shadow-lg">
+                    <div class="flex items-center gap-1.5"><i data-lucide="cuboid" class="w-4 h-4 text-blue-400"></i><span id="blockCount" class="text-xs font-medium text-gray-300">0 Blocks</span></div>
+                    <div class="w-px h-3 bg-gray-600"></div>
+                    <div class="flex items-center gap-1.5"><i data-lucide="bone" class="w-4 h-4 text-purple-400"></i><span id="boneCount" class="text-xs font-medium text-gray-300">0 Bones</span></div>
+                    <div class="w-px h-3 bg-gray-600"></div>
+                    <div class="flex items-center gap-1.5"><i data-lucide="film" class="w-4 h-4 text-green-400"></i><span id="animCount" class="text-xs font-medium text-gray-300">0 Anims</span></div>
                 </div>
-                <div class="bg-black/80 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-800 shadow-lg flex items-center justify-between min-w-[140px]">
-                    <span class="text-xs text-purple-400 uppercase tracking-wider font-semibold">Voxels</span>
-                    <div id="point-count" class="text-xl font-mono font-bold text-white">0</div>
-                </div>
-                <div class="bg-black/80 backdrop-blur-md px-4 py-2 rounded-xl border border-gray-800 shadow-lg flex items-center justify-between min-w-[140px]">
-                    <span class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Stream Size</span>
-                    <div id="stream-size" class="text-sm font-mono text-gray-300">0 KB</div>
+                <!-- Reference Image Preview -->
+                <div id="reference-preview" class="w-16 h-16 rounded-lg shadow-lg relative group">
+                    <button id="clearRefBtn" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="x" class="w-3 h-3"></i></button>
+                    <div class="absolute bottom-0 left-0 w-full bg-black/60 text-[8px] text-center p-0.5 rounded-b-lg">REF</div>
                 </div>
             </div>
             
-            <button id="btn-exit" class="bg-red-500/80 hover:bg-red-500 text-white p-4 rounded-full shadow-lg backdrop-blur-md transition-all active:scale-90">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
+            <div class="flex gap-2">
+                <input type="file" id="fileUpload" accept="image/*,.json,.bbmodel" class="hidden">
+                <button id="uploadBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-blue-300" title="Upload Ref Image or .bbmodel">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                </button>
+                <button id="exportBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-green-400" title="Export .bbmodel">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                </button>
+                <button id="clearBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-red-400" title="Clear Canvas">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+                <button id="openSettingsBtn" class="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors shadow-lg text-gray-300">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
+            </div>
         </div>
-        
-        <!-- Bottom Controls -->
-        <div class="flex flex-col items-center gap-4 pointer-events-auto w-full max-w-md mx-auto relative">
-             <button id="btn-scan" class="w-full bg-white text-black font-bold py-5 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.1)] active:bg-gray-200 active:scale-[0.98] transition-all text-xl flex items-center justify-center gap-3 relative overflow-hidden">
-                <div class="w-4 h-4 bg-purple-600 rounded-full hidden" id="scan-indicator"></div>
-                <span id="scan-text">Hold to Stream Details</span>
-            </button>
-            <button id="btn-export" class="w-full bg-purple-700 hover:bg-purple-600 text-white font-bold py-4 rounded-xl shadow-lg backdrop-blur-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-purple-500/30">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Compile & Export
-            </button>
+
+        <div class="pointer-events-auto w-full max-w-2xl mx-auto mb-2 relative z-20">
+            <div class="glass-panel rounded-2xl p-2 shadow-2xl flex items-end gap-2">
+                <textarea id="prompt" rows="1" class="glass-input flex-1 rounded-xl px-4 py-3 text-sm resize-none" placeholder="E.g., Build a detailed wolf with walk and howl animations..." style="min-height: 44px; max-height: 120px;"></textarea>
+                <button id="generateBtn" class="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl p-3 h-[44px] w-[44px] flex items-center justify-center transition-colors shrink-0 shadow-lg" disabled>
+                    <i data-lucide="sparkles" class="w-5 h-5" id="btnIcon"></i>
+                    <div id="loadingSpinner" class="spinner hidden"></div>
+                </button>
+            </div>
+            <div class="text-center mt-2">
+                <span id="agentStatus" class="text-[10px] font-semibold text-blue-400 uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full backdrop-blur hidden">Agent is idle</span>
+            </div>
         </div>
     </div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
+    <!-- Proposed Changes Review Modal -->
+    <div id="review-modal" class="pointer-events-auto modal modal-hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[85vh] border border-blue-500/30">
+            <div class="p-5 border-b border-white/10 flex justify-between items-center bg-blue-900/20">
+                <h2 class="text-lg font-bold flex items-center gap-2 text-blue-100"><i data-lucide="git-pull-request" class="w-5 h-5 text-blue-400"></i> AI Proposed Changes</h2>
+                <span class="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full border border-blue-500/30">Awaiting Approval</span>
+            </div>
+            
+            <div class="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
+                <p class="text-xs text-gray-300">The AI has evaluated the canvas and generated the following instructions. Review them before applying.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Blocks Mod -->
+                    <div class="bg-black/40 rounded-xl p-4 border border-white/5">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="cuboid" class="w-4 h-4"></i> Geometry Edits</h3>
+                        <ul id="review-blocks-list" class="text-xs space-y-2 font-mono text-gray-300 max-h-40 overflow-y-auto"></ul>
+                    </div>
+                    <!-- Bones Mod -->
+                    <div class="bg-black/40 rounded-xl p-4 border border-white/5">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="bone" class="w-4 h-4"></i> Bone Hierarchy</h3>
+                        <ul id="review-bones-list" class="text-xs space-y-2 font-mono text-gray-300 max-h-40 overflow-y-auto"></ul>
+                    </div>
+                </div>
 
-        // --- DOM Elements ---
-        const startScreen = document.getElementById('start-screen');
-        const arStatusContainer = document.getElementById('ar-status-container');
-        const domOverlay = document.getElementById('dom-overlay');
-        const webxrCanvasContainer = document.getElementById('webxr-canvas-container');
-        
-        const btnExit = document.getElementById('btn-exit');
-        const btnScan = document.getElementById('btn-scan');
-        const btnExport = document.getElementById('btn-export');
-        const pointCountEl = document.getElementById('point-count');
-        const planeCountEl = document.getElementById('plane-count');
-        const streamSizeEl = document.getElementById('stream-size');
-        const scanIndicator = document.getElementById('scan-indicator');
-        const scanText = document.getElementById('scan-text');
+                <!-- Animations Mod -->
+                <div class="bg-black/40 rounded-xl p-4 border border-white/5">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="film" class="w-4 h-4"></i> Animations Generated</h3>
+                    <ul id="review-anims-list" class="text-xs space-y-2 font-mono text-gray-300"></ul>
+                </div>
+            </div>
 
-        // --- Core Three.js Variables ---
-        let scene, camera, renderer;
-        let reticle;
-        let planeGroup;
-        
-        // --- High-Density Instanced Rendering ---
-        const MAX_INSTANCES_PER_CHUNK = 10000;
-        let instancedMeshes = [];
-        let currentInstancedMesh = null;
-        let currentInstanceCount = 0;
-        const dummyMatrix = new THREE.Matrix4();
-        
-        // Smaller voxels for higher detail streaming (1cm)
-        const VOXEL_SIZE = 0.01;
-        const voxelGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
-        const voxelMat = new THREE.MeshStandardMaterial({ 
-            color: 0x9333ea, // Purple
-            roughness: 0.6, 
-            metalness: 0.2 
-        });
+            <div class="p-4 border-t border-white/10 flex justify-between bg-black/40">
+                <button id="rejectBtn" class="px-5 py-2.5 bg-red-900/50 hover:bg-red-800 text-red-200 rounded-xl flex items-center gap-2 text-sm font-semibold transition-colors border border-red-800/50">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i> Reject & Finish
+                </button>
+                <button id="approveBtn" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-[0_0_15px_rgba(37,99,235,0.5)]">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i> Approve & Apply
+                </button>
+            </div>
+        </div>
+    </div>
 
-        // Cache base vertices of the voxel for fast OBJ translation
-        const voxelBaseVertices = [];
-        const posAttr = voxelGeo.attributes.position;
-        for (let i = 0; i < posAttr.count; i++) {
-            voxelBaseVertices.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="pointer-events-auto modal modal-hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl shadow-2xl overflow-hidden pointer-events-auto">
+            <div class="p-5 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h2 class="text-lg font-semibold flex items-center gap-2"><i data-lucide="cpu" class="w-5 h-5 text-blue-400"></i> Engine Settings</h2>
+                <button id="closeSettingsBtn" class="p-1 rounded-lg hover:bg-white/10"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+            </div>
+            <div class="p-5 flex flex-col gap-6">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Gemini API Key</label>
+                    <div class="flex gap-2">
+                        <input type="password" id="apiKey" class="glass-input flex-1 rounded-lg px-3 py-2.5 text-sm" placeholder="AIzaSy...">
+                        <button id="scanModelsBtn" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white px-4 rounded-lg flex items-center justify-center min-w-[100px] transition-colors">
+                            <span id="scanBtnText" class="text-xs font-semibold">Connect</span>
+                            <div id="scanSpinner" class="spinner hidden"></div>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
+                    <div>
+                        <div class="text-sm font-semibold text-purple-300 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-4 h-4"></i> Deep Thinking</div>
+                        <div class="text-[10px] text-gray-400 mt-1 max-w-[200px]">Uses 'Pro' models for better reasoning. Takes longer.</div>
+                    </div>
+                    <div class="relative inline-block w-12 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" id="deepThinkingToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600"/>
+                        <label for="deepThinkingToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"></label>
+                    </div>
+                </div>
+                <div id="modelSelectContainer" class="opacity-50 transition-opacity duration-300">
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider flex items-center gap-2">Vision Model <i data-lucide="eye" class="w-3 h-3 text-gray-500"></i></label>
+                    <div class="relative">
+                        <select id="modelSelect" class="glass-input w-full rounded-lg pl-3 pr-10 py-2.5 text-sm appearance-none cursor-pointer disabled:cursor-not-allowed" disabled>
+                            <option value="">Awaiting connection...</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // --- GLOBAL STATE ---
+        let scene, camera, renderer, controls;
+        let aiBlocks = {};       // Flat dictionary of cubes {id: data}
+        let aiBones = {};        // Hierarchy of bones {name: data}
+        let aiAnimations = [];   // Array of generated animations
+        
+        let selectedModelString = "";
+        let isGenerating = false;
+        let useDeepThinking = false;
+        
+        // Upload State
+        let uploadedImageBase64 = null;
+        
+        // Loop State
+        let activeOriginalPrompt = "";
+        let approvalResolve = null; 
+        
+        // Texture Atlas Math
+        let atlasW = 64, atlasH = 64;
+        let atlasBase64 = "";
+
+        // --- UTILS ---
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
         }
-        
-        // Use a generic index array for a standard box geometry to construct OBJ faces
-        // Three.js BoxGeometry has 24 vertices (4 per face, 6 faces)
-        const faceIndices = [];
-        const indexAttr = voxelGeo.getIndex();
-        for (let i = 0; i < indexAttr.count; i+=3) {
-            faceIndices.push([indexAttr.getX(i), indexAttr.getX(i+1), indexAttr.getX(i+2)]);
-        }
 
-        // --- WebXR Variables ---
-        let xrSession = null;
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-        const planeMap = new Map(); 
+        window.onload = function() {
+            init3D();
+            setupUI();
+        };
 
-        // --- Scanning & Streaming Variables ---
-        let isScanning = false;
-        let pointCount = 0;
-        let lastPointPos = new THREE.Vector3(9999, 9999, 9999);
-        const MIN_DISTANCE_M = 0.008; // 8mm resolution threshold
-
-        // OPFS State
-        let streamFileHandle = null;
-        let streamWritable = null;
-        let globalVertexOffset = 0; // Tracks OBJ vertices to ensure faces map correctly
-        let totalBytesWritten = 0;
-        
-        let chunkQueue = [];
-        let isFlushing = false;
-        let hasFileSystemSupport = false;
-
-        init();
-
-        async function init() {
-            // 1. Initialize OPFS Streaming Storage
-            await initStorage();
-
-            // 2. Setup Three.js Engine
+        function init3D() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            scene.background = new THREE.Color(0x1e1e24);
+            scene.fog = new THREE.Fog(0x1e1e24, 40, 150);
 
-            const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-            light.position.set(0, 2, 0);
-            scene.add(light);
-            
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(1, 2, 1);
-            scene.add(directionalLight);
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(25, 20, 25);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true;
-            webxrCanvasContainer.appendChild(renderer.domElement);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            reticle = new THREE.Mesh(
-                new THREE.RingGeometry(0.015, 0.02, 32).rotateX(-Math.PI / 2),
-                new THREE.MeshBasicMaterial({ color: 0xa855f7 })
-            );
-            reticle.matrixAutoUpdate = false;
-            reticle.visible = false;
-            scene.add(reticle);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 5, 0);
 
-            planeGroup = new THREE.Group();
-            scene.add(planeGroup);
-            
-            // Initialize first instance chunk
-            createNewInstancedChunk();
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
 
-            checkXRAvailability();
-            window.addEventListener('resize', onWindowResize, false);
-            setupEvents();
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            mainLight.position.set(30, 50, 30);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 2048;
+            mainLight.shadow.mapSize.height = 2048;
+            mainLight.shadow.camera.near = 0.5;
+            mainLight.shadow.camera.far = 150;
+            scene.add(mainLight);
+
+            const groundGeo = new THREE.PlaneGeometry(200, 200);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x15151a, roughness: 1, metalness: 0 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const gridHelper = new THREE.GridHelper(100, 100, 0x444455, 0x222233);
+            gridHelper.position.y = 0.01; 
+            scene.add(gridHelper);
+
+            const originGroup = new THREE.Group();
+            const dotGeo = new THREE.SphereGeometry(0.3, 16, 16);
+            const dotMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+            const dot = new THREE.Mesh(dotGeo, dotMat);
+            originGroup.add(dot);
+            originGroup.position.y = 0.02;
+            scene.add(originGroup);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate();
         }
 
-        async function initStorage() {
-            try {
-                if (navigator.storage && navigator.storage.getDirectory) {
-                    const rootDir = await navigator.storage.getDirectory();
-                    // Generate unique filename for this session
-                    const fileName = `stream_scan_${Date.now()}.obj`;
-                    streamFileHandle = await rootDir.getFileHandle(fileName, { create: true });
-                    streamWritable = await streamFileHandle.createWritable();
-                    
-                    // Write OBJ Header
-                    const header = `# AR HD Stream Scanner\no Streamed_Details\n`;
-                    await streamWritable.write(header);
-                    totalBytesWritten += header.length;
-                    
-                    hasFileSystemSupport = true;
-                    console.log("OPFS Streaming initialized successfully.");
-                } else {
-                    throw new Error("OPFS not supported.");
-                }
-            } catch (err) {
-                console.warn("Direct file streaming unavailable. Falling back to RAM buffering.", err);
-                hasFileSystemSupport = false;
-                // Fallback will just keep chunks in memory (array)
-            }
-        }
-
-        function createNewInstancedChunk() {
-            currentInstancedMesh = new THREE.InstancedMesh(voxelGeo, voxelMat, MAX_INSTANCES_PER_CHUNK);
-            currentInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            // Hide all instances initially
-            currentInstancedMesh.count = 0; 
-            scene.add(currentInstancedMesh);
-            instancedMeshes.push(currentInstancedMesh);
-            currentInstanceCount = 0;
-        }
-
-        function checkXRAvailability() {
-            if ('xr' in navigator) {
-                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-                    if (supported) {
-                        arStatusContainer.innerHTML = '';
-                        const btnEnterAR = document.createElement('button');
-                        btnEnterAR.className = 'w-full bg-purple-700 hover:bg-purple-600 text-white font-bold py-4 px-8 rounded-xl shadow-[0_0_20px_rgba(147,51,234,0.4)] transition-transform transform active:scale-[0.98] text-lg tracking-wide';
-                        btnEnterAR.innerText = 'Launch HD Scanner';
-                        btnEnterAR.onclick = onRequestSession;
-                        arStatusContainer.appendChild(btnEnterAR);
-                    } else {
-                        showError("WebXR 'immersive-ar' is not supported on this device.");
-                    }
-                }).catch(err => showError(`WebXR check failed: ${err.message}`));
-            } else {
-                showError("WebXR API is completely missing. Please use a compatible browser.");
-            }
-        }
-
-        function showError(message) {
-            arStatusContainer.innerHTML = `<div class="text-red-400 bg-red-900/30 p-4 rounded-xl border border-red-500/30 text-sm">${message}</div>`;
-        }
-
-        async function onRequestSession() {
-            const sessionInit = {
-                requiredFeatures: ['hit-test', 'local'],
-                optionalFeatures: ['dom-overlay', 'planes'],
-                domOverlay: { root: document.getElementById('dom-overlay') }
-            };
-
-            try {
-                xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
-                xrSession.addEventListener('end', onSessionEnded);
-                
-                renderer.xr.setReferenceSpaceType('local');
-                await renderer.xr.setSession(xrSession);
-                
-                startScreen.classList.add('hidden');
-                domOverlay.classList.remove('hidden');
-                
-                renderer.setAnimationLoop(render);
-            } catch (err) {
-                showError(`Failed to start AR Session: ${err.message}`);
-            }
-        }
-
-        function onSessionEnded() {
-            xrSession.removeEventListener('end', onSessionEnded);
-            xrSession = null;
-            hitTestSourceRequested = false;
-            hitTestSource = null;
-            
-            renderer.setAnimationLoop(null);
-            startScreen.classList.remove('hidden');
-            domOverlay.classList.add('hidden');
-        }
-
-        function setupEvents() {
-            btnExit.addEventListener('click', () => { if (xrSession) xrSession.end(); });
-
-            const startScanning = (e) => {
-                e.preventDefault();
-                isScanning = true;
-                scanIndicator.classList.remove('hidden');
-                scanText.innerText = "Streaming Details...";
-                btnScan.classList.add('bg-gray-100');
-                btnScan.classList.add('scanning-active');
-            };
-
-            const stopScanning = (e) => {
-                e.preventDefault();
-                isScanning = false;
-                scanIndicator.classList.add('hidden');
-                scanText.innerText = "Hold to Stream Details";
-                btnScan.classList.remove('bg-gray-100');
-                btnScan.classList.remove('scanning-active');
-            };
-
-            btnScan.addEventListener('pointerdown', startScanning);
-            btnScan.addEventListener('pointerup', stopScanning);
-            btnScan.addEventListener('pointerleave', stopScanning);
-            btnScan.addEventListener('pointercancel', stopScanning);
-
-            btnExport.addEventListener('click', exportHybridScene);
-        }
-
-        function render(timestamp, frame) {
-            if (frame) {
-                const referenceSpace = renderer.xr.getReferenceSpace();
-                const session = renderer.xr.getSession();
-
-                // 1. Process Architectural Planes
-                if (frame.detectedPlanes) {
-                    processDetectedPlanes(frame.detectedPlanes, frame, referenceSpace);
-                }
-
-                // 2. Setup Hit Test
-                if (hitTestSourceRequested === false) {
-                    session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                        session.requestHitTestSource({ space: viewerSpace }).then((source) => {
-                            hitTestSource = source;
-                        });
-                    });
-                    session.addEventListener('end', () => {
-                        hitTestSourceRequested = false;
-                        hitTestSource = null;
-                    });
-                    hitTestSourceRequested = true;
-                }
-
-                // 3. Process Hit Test and Stream
-                if (hitTestSource) {
-                    const hitTestResults = frame.getHitTestResults(hitTestSource);
-                    if (hitTestResults.length > 0) {
-                        const hit = hitTestResults[0];
-                        const pose = hit.getPose(referenceSpace);
-                        
-                        reticle.visible = true;
-                        reticle.matrix.fromArray(pose.transform.matrix);
-                        
-                        if (isScanning) streamVoxelAtReticle();
-                    } else {
-                        reticle.visible = false;
-                    }
-                }
-            }
-
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
             renderer.render(scene, camera);
         }
 
-        function processDetectedPlanes(detectedPlanes, frame, referenceSpace) {
-            for (const [xrPlane, meshData] of planeMap.entries()) {
-                if (!detectedPlanes.has(xrPlane)) {
-                    planeGroup.remove(meshData.mesh);
-                    meshData.mesh.geometry.dispose();
-                    planeMap.delete(xrPlane);
-                }
-            }
+        function setupUI() {
+            document.getElementById('openSettingsBtn').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('modal-hidden'));
+            document.getElementById('closeSettingsBtn').addEventListener('click', () => document.getElementById('settings-modal').classList.add('modal-hidden'));
+            
+            // Upload Handlers
+            document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileUpload').click());
+            document.getElementById('fileUpload').addEventListener('change', handleFileUpload);
+            document.getElementById('clearRefBtn').addEventListener('click', clearReference);
 
-            detectedPlanes.forEach(xrPlane => {
-                const pose = frame.getPose(xrPlane.planeSpace, referenceSpace);
-                if (!pose) return;
-
-                let meshData = planeMap.get(xrPlane);
-                
-                if (!meshData || meshData.lastChangedTime < xrPlane.lastChangedTime) {
-                    const polygon = xrPlane.polygon;
-                    const shape = new THREE.Shape();
-                    
-                    for (let i = 0; i < polygon.length; i++) {
-                        if (i === 0) shape.moveTo(polygon[i].x, polygon[i].z);
-                        else shape.lineTo(polygon[i].x, polygon[i].z);
-                    }
-                    
-                    const geometry = new THREE.ShapeGeometry(shape);
-                    geometry.rotateX(-Math.PI / 2);
-
-                    if (meshData) {
-                        meshData.mesh.geometry.dispose();
-                        meshData.mesh.geometry = geometry;
-                        meshData.lastChangedTime = xrPlane.lastChangedTime;
-                    } else {
-                        const isVertical = xrPlane.orientation === 'vertical';
-                        const color = isVertical ? 0x22c55e : 0x3b82f6; 
-                        
-                        const material = new THREE.MeshStandardMaterial({ 
-                            color: color, 
-                            transparent: true, 
-                            opacity: 0.3,
-                            side: THREE.DoubleSide,
-                            roughness: 0.9
-                        });
-                        
-                        const mesh = new THREE.Mesh(geometry, material);
-                        mesh.matrixAutoUpdate = false;
-                        planeGroup.add(mesh);
-                        
-                        meshData = { mesh: mesh, lastChangedTime: xrPlane.lastChangedTime };
-                        planeMap.set(xrPlane, meshData);
-                    }
-                }
-                
-                meshData.mesh.matrix.fromArray(pose.transform.matrix);
+            // Auto-resize prompt
+            const promptInput = document.getElementById('prompt');
+            promptInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
             });
 
-            planeCountEl.innerText = planeMap.size;
+            document.getElementById('deepThinkingToggle').addEventListener('change', (e) => {
+                useDeepThinking = e.target.checked;
+                if(document.getElementById('apiKey').value) scanAvailableModels();
+            });
+
+            document.getElementById('scanModelsBtn').addEventListener('click', scanAvailableModels);
+            document.getElementById('generateBtn').addEventListener('click', startInfiniteLoop);
+            document.getElementById('clearBtn').addEventListener('click', clearScene);
+            document.getElementById('exportBtn').addEventListener('click', exportBBModel);
+            
+            // Review Actions
+            document.getElementById('approveBtn').addEventListener('click', () => { if(approvalResolve) approvalResolve(true); });
+            document.getElementById('rejectBtn').addEventListener('click', () => { if(approvalResolve) approvalResolve(false); });
         }
 
-        function streamVoxelAtReticle() {
-            const currentPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-            
-            if (currentPos.distanceTo(lastPointPos) > MIN_DISTANCE_M) {
-                
-                // 1. Update Visualizer (InstancedMesh)
-                if (currentInstanceCount >= MAX_INSTANCES_PER_CHUNK) {
-                    createNewInstancedChunk();
-                }
-                
-                // Set matrix for the current instance
-                currentInstancedMesh.setMatrixAt(currentInstanceCount, reticle.matrix);
-                currentInstanceCount++;
-                currentInstancedMesh.count = currentInstanceCount; // Only render up to filled instances
-                currentInstancedMesh.instanceMatrix.needsUpdate = true;
-                
-                // 2. Generate Raw OBJ Data for Streaming
-                generateOBJChunk(reticle.matrix);
-                
-                // 3. Update State Tracker
-                lastPointPos.copy(currentPos);
-                pointCount++;
-                
-                // Avoid DOM update spam, update roughly every 10 points
-                if(pointCount % 5 === 0) {
-                    pointCountEl.innerText = pointCount;
-                }
-            }
-        }
-
-        function generateOBJChunk(matrix) {
-            let chunk = "";
-            const vertexCount = voxelBaseVertices.length;
-            
-            // Calculate and append world-space vertices
-            for(let i = 0; i < vertexCount; i++) {
-                const v = voxelBaseVertices[i].clone().applyMatrix4(matrix);
-                chunk += `v ${v.x.toFixed(5)} ${v.y.toFixed(5)} ${v.z.toFixed(5)}\n`;
-            }
-            
-            // Append faces (adjusted by global offset)
-            // OBJ indices are 1-based, so we add 1 + globalVertexOffset
-            const offset = globalVertexOffset + 1;
-            for(let i = 0; i < faceIndices.length; i++) {
-                const face = faceIndices[i];
-                // Three.js index array might be winding order specific, OBJ requires correct winding for normals
-                chunk += `f ${face[0] + offset} ${face[1] + offset} ${face[2] + offset}\n`;
-            }
-            
-            globalVertexOffset += vertexCount;
-            
-            // Queue chunk for async writing
-            chunkQueue.push(chunk);
-            flushStreamQueue();
-        }
-
-        async function flushStreamQueue() {
-            if (isFlushing || chunkQueue.length === 0) return;
-            isFlushing = true;
-            
-            // Batch process current queue
-            const dataToStream = chunkQueue.join('');
-            chunkQueue = []; // Clear for next frames
-            
-            totalBytesWritten += dataToStream.length;
-            
-            // Update UI size (rough KB estimation based on string length)
-            streamSizeEl.innerText = (totalBytesWritten / 1024).toFixed(1) + ' KB';
-
-            if (hasFileSystemSupport && streamWritable) {
-                try {
-                    await streamWritable.write(dataToStream);
-                } catch (err) {
-                    console.error("OPFS Write Error", err);
-                }
+        function setStatus(msg, active=true) {
+            const el = document.getElementById('agentStatus');
+            el.textContent = msg;
+            if(active) {
+                el.classList.remove('hidden');
+                el.classList.add('pulse-text');
             } else {
-                // RAM Fallback: Push it back into a persistent array
-                // Overriding local queue variable for RAM buffering
-                if (!window.ramBuffer) window.ramBuffer = [];
-                window.ramBuffer.push(dataToStream);
+                el.classList.remove('pulse-text');
+                setTimeout(() => el.classList.add('hidden'), 2000);
             }
-            
-            isFlushing = false;
-            
-            // If more items came in while writing, flush again
-            if (chunkQueue.length > 0) flushStreamQueue();
         }
 
-        async function exportHybridScene() {
-            if (planeMap.size === 0 && pointCount === 0) {
-                alert("Nothing mapped yet.");
-                return;
-            }
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
-            const originalText = btnExport.innerHTML;
-            btnExport.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Compiling...`;
+            const reader = new FileReader();
             
+            if (file.type.startsWith('image/')) {
+                reader.onload = (e) => {
+                    const base64 = e.target.result;
+                    uploadedImageBase64 = base64.split(',')[1];
+                    const preview = document.getElementById('reference-preview');
+                    preview.style.backgroundImage = `url(${base64})`;
+                    preview.style.display = 'block';
+                    setStatus("Image reference loaded.", false);
+                };
+                reader.readAsDataURL(file);
+            } 
+            else if (file.name.endsWith('.bbmodel') || file.name.endsWith('.json')) {
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        parseBBModelToScene(data);
+                        setStatus("Model loaded successfully.", false);
+                    } catch(err) {
+                        alert("Failed to parse model file. Must be valid JSON/bbmodel.");
+                        console.error(err);
+                    }
+                };
+                reader.readAsText(file);
+            }
+            // Reset input
+            event.target.value = '';
+        }
+
+        function clearReference() {
+            uploadedImageBase64 = null;
+            document.getElementById('reference-preview').style.display = 'none';
+        }
+
+        function parseBBModelToScene(data) {
+            clearScene();
+            
+            // Very simplified generic parser. Assumes standard Blockbench format.
+            if(data.elements && data.outliner) {
+                // Build bones
+                const parseOutliner = (nodes, parentName) => {
+                    nodes.forEach(node => {
+                        if(typeof node === 'object' && node.name) {
+                            aiBones[node.name] = {
+                                pivot: node.origin || [0,0,0],
+                                rotation: node.rotation || [0,0,0],
+                                parent: parentName
+                            };
+                            if(node.children) parseOutliner(node.children, node.name);
+                        }
+                    });
+                };
+                parseOutliner(data.outliner, null);
+
+                // Build blocks
+                data.elements.forEach(el => {
+                    if(!el.from || !el.to) return;
+                    const w = el.to[0] - el.from[0];
+                    const h = el.to[1] - el.from[1];
+                    const d = el.to[2] - el.from[2];
+                    const x = el.from[0] + (w/2);
+                    const y = el.from[1] + (h/2);
+                    const z = el.from[2] + (d/2);
+                    
+                    // Find bone parent by checking outliner
+                    let boneName = "root";
+                    const findBone = (nodes, boneId) => {
+                        for(let n of nodes) {
+                            if(typeof n === 'object') {
+                                if(n.children && n.children.includes(el.uuid)) return n.name;
+                                let res = findBone(n.children || [], boneId);
+                                if(res) return res;
+                            }
+                        }
+                        return null;
+                    };
+                    let found = findBone(data.outliner, el.uuid);
+                    if(found) boneName = found;
+
+                    const blockData = {
+                        action: 'add',
+                        id: el.uuid || generateUUID(),
+                        name: el.name || 'cube',
+                        bone: boneName,
+                        x: x, y: y, z: z, w: w, h: h, d: d,
+                        rx: el.rotation ? el.rotation[0] : 0,
+                        ry: el.rotation ? el.rotation[1] : 0,
+                        rz: el.rotation ? el.rotation[2] : 0,
+                        color: '#cccccc' // generic color if no texture
+                    };
+                    aiBlocks[blockData.id] = { data: blockData, meshGroup: null };
+                });
+                
+                if(data.animations) aiAnimations = data.animations;
+                
+                rebuildThreeScene();
+            }
+        }
+
+        function clearScene() {
+            if(isGenerating) return;
+            Object.values(aiBlocks).forEach(b => {
+                if(b.meshGroup) scene.remove(b.meshGroup);
+            });
+            aiBlocks = {};
+            aiBones = {};
+            aiAnimations = [];
+            updateCounters();
+        }
+
+        function updateCounters() {
+            document.getElementById('blockCount').textContent = `${Object.keys(aiBlocks).length} Blocks`;
+            document.getElementById('boneCount').textContent = `${Object.keys(aiBones).length} Bones`;
+            document.getElementById('animCount').textContent = `${aiAnimations.length} Anims`;
+        }
+
+        async function scanAvailableModels() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) return alert("API Key is required");
+
+            const btnText = document.getElementById('scanBtnText');
+            const spinner = document.getElementById('scanSpinner');
+            const container = document.getElementById('modelSelectContainer');
+            const select = document.getElementById('modelSelect');
+
+            btnText.textContent = ""; spinner.classList.remove('hidden');
+            select.disabled = true; 
+
             try {
-                // Ensure any pending streams are flushed
-                while (isFlushing || chunkQueue.length > 0) {
-                    await new Promise(r => setTimeout(r, 100));
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Invalid API Key");
+
+                const data = await response.json();
+                let validModels = data.models.filter(m => m.supportedGenerationMethods.includes("generateContent") && m.name.includes("gemini") && !m.name.includes("vision"));
+
+                if (useDeepThinking) {
+                    validModels = validModels.filter(m => m.name.includes("pro"));
+                    validModels.sort((a, b) => b.name.localeCompare(a.name)); 
+                } else {
+                    validModels = validModels.filter(m => m.name.includes("flash") || (!m.name.includes("pro") && !m.name.includes("thinking")));
                 }
 
-                // 1. Export RAM-based Room Planes using Three.js Exporter
-                let planesOBJ = "";
-                if (planeGroup.children.length > 0) {
-                    const exporter = new OBJExporter();
+                if (validModels.length === 0) throw new Error("No compatible models.");
+
+                select.innerHTML = '';
+                validModels.forEach((m, i) => {
+                    const option = document.createElement('option');
+                    option.value = m.name; option.textContent = m.displayName || m.name.replace('models/', '');
+                    if (i === 0) option.selected = true; 
+                    select.appendChild(option);
+                });
+
+                container.classList.remove('opacity-50');
+                select.disabled = false; 
+                document.getElementById('generateBtn').disabled = false;
+                selectedModelString = select.value;
+                
+            } catch (error) {
+                alert(`Scan Failed: ${error.message}`);
+                container.classList.add('opacity-50');
+            } finally {
+                btnText.textContent = "Connect"; spinner.classList.add('hidden');
+            }
+        }
+
+        async function startInfiniteLoop() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const promptInput = document.getElementById('prompt');
+            
+            if (!apiKey || !selectedModelString || !promptInput.value.trim()) return;
+            activeOriginalPrompt = promptInput.value.trim();
+
+            isGenerating = true;
+            document.getElementById('generateBtn').disabled = true;
+            document.getElementById('btnIcon').classList.add('hidden');
+            document.getElementById('loadingSpinner').classList.remove('hidden');
+            
+            let isSatisfied = false;
+            setStatus("Thinking...", true);
+
+            try {
+                // Infinite Loop - broken only by user rejection or AI reporting complete
+                while (!isSatisfied) {
+                    const result = await runGenerationStep(apiKey, activeOriginalPrompt);
                     
-                    // We need to offset the exporter's internal vertex count so it doesn't 
-                    // clash with our streamed voxel vertex count.
-                    // A trick is to append the exporter's result, but since we are appending, 
-                    // we need to adjust the faces of the planes.
-                    
-                    // To do this reliably without hacking the exporter:
-                    // Create a dummy scene, export planes, then manually regex/shift the face indices 
-                    // by `globalVertexOffset`.
-                    
-                    const tempGroup = new THREE.Group();
-                    planeGroup.children.forEach(mesh => {
-                        const clone = mesh.clone();
-                        clone.applyMatrix4(mesh.matrix);
-                        clone.matrix.identity();
-                        clone.position.set(0,0,0);
-                        clone.rotation.set(0,0,0);
-                        clone.scale.set(1,1,1);
-                        tempGroup.add(clone);
-                    });
-                    
-                    const rawPlanesOBJ = exporter.parse(tempGroup);
-                    
-                    // Shift the 'f ' indices in rawPlanesOBJ by globalVertexOffset
-                    const lines = rawPlanesOBJ.split('\n');
-                    for (let i = 0; i < lines.length; i++) {
-                        if (lines[i].startsWith('f ')) {
-                            const parts = lines[i].trim().split(/\s+/);
-                            // Process face parts e.g. f 1/1/1 2/2/2 3/3/3
-                            for (let j = 1; j < parts.length; j++) {
-                                const subParts = parts[j].split('/');
-                                subParts[0] = (parseInt(subParts[0]) + globalVertexOffset).toString();
-                                parts[j] = subParts.join('/');
-                            }
-                            lines[i] = parts.join(' ');
+                    if (result.type === 'complete') {
+                        isSatisfied = true;
+                    } 
+                    else if (result.type === 'needs_approval') {
+                        setStatus("Awaiting Approval...", true);
+                        
+                        // Populate Review Modal
+                        populateReviewModal(result.data);
+                        document.getElementById('review-modal').classList.remove('modal-hidden');
+                        
+                        const userApproved = await new Promise((resolve) => approvalResolve = resolve);
+                        
+                        document.getElementById('review-modal').classList.add('modal-hidden');
+                        approvalResolve = null;
+
+                        if (userApproved) {
+                            setStatus("Applying Geometry & Bones...", true);
+                            await applyStateRealtime(result.data);
+                        } else {
+                            isSatisfied = true; // User stopped it
                         }
                     }
-                    planesOBJ = "\no Room_Planes\n" + lines.join('\n');
                 }
 
-                // 2. Finalize File Streaming
-                let finalBlobUrl;
-                if (hasFileSystemSupport && streamWritable) {
-                    // Write planes to the end of the file
-                    if (planesOBJ) await streamWritable.write(planesOBJ);
-                    await streamWritable.close();
-                    streamWritable = null; // Prevent further writes
-
-                    const file = await streamFileHandle.getFile();
-                    finalBlobUrl = URL.createObjectURL(file);
-                } else {
-                    // RAM Fallback Compiler
-                    const ramData = (window.ramBuffer ? window.ramBuffer.join('') : "") + planesOBJ;
-                    const blob = new Blob([ramData], { type: 'text/plain' });
-                    finalBlobUrl = URL.createObjectURL(blob);
-                }
-
-                // 3. Trigger Download
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = finalBlobUrl;
-                a.download = `hd_room_scan_${new Date().getTime()}.obj`;
-                document.body.appendChild(a);
-                a.click();
-                
-                // Cleanup
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(finalBlobUrl), 100);
-                
-                // Reset session storage if user wants to scan more (optional)
-                // For safety, let's keep them in the current state unless they refresh.
+                setStatus("Process Finished.", false);
 
             } catch (error) {
-                console.error("Compilation Failed:", error);
-                alert("Error compiling mesh. File might be too large or disk is full.");
+                console.error(error);
+                alert("Error: " + error.message);
             } finally {
-                btnExport.innerHTML = originalText;
+                isGenerating = false;
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('loadingSpinner').classList.add('hidden');
+                document.getElementById('btnIcon').classList.remove('hidden');
             }
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        async function runGenerationStep(apiKey, promptStr) {
+            renderer.render(scene, camera);
+            const imageBase64 = renderer.domElement.toDataURL('image/jpeg', 0.5).split(',')[1];
+            
+            // Serialize current state
+            const currentBlocks = Object.values(aiBlocks).map(b => b.data);
+            const isInitial = (currentBlocks.length === 0);
+
+            const systemPrompt = `You are a Master Blockbench 3D Entity Modeler and Animator.
+You operate in a voxel grid. Y is up. Ground is Y=0. Floats (e.g. 0.5) allowed.
+
+CRITICAL DIRECTIVES:
+1. HIERARCHY (BONES): Every cube must belong to a "bone". Bones act as groups and pivot points. 
+   Define bones in the 'bones' object. (e.g., "head": { "pivot": [0,24,0], "parent": "body" }).
+2. ANIMATIONS: You MUST write Blockbench-compatible animations if requested (e.g., walk, idle, run).
+   An animation modifies bone rotations over time.
+   Format: "animations": [{ "name": "walk", "loop": "loop", "length": 1.0, "anim_bones": { "leg_l": { "rotation": { "0.0": [0,0,0], "0.5": [30,0,0], "1.0": [0,0,0] } } } }]
+3. CUBES: Coordinates (x,y,z) are the CENTER of the cube. w,h,d are full dimensions. rx,ry,rz are cube-specific rotations (usually 0, use bone rotation for limbs).
+4. NO SCENERY: Only build the entity. No floors, no blood puddles on the ground.
+
+Task: ${isInitial ? `Create the initial entity, bones, and animations for: "${promptStr}"` : `Review the current image. Fix, edit, or add missing details/animations for: "${promptStr}". Output empty actions/animations if perfect.`}`;
+
+            // Complex Schema combining Bones, Cubes, and Animations
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    texture_size: { type: "NUMBER", description: "64, 128, or 256" },
+                    bones: {
+                        type: "OBJECT",
+                        description: "Dictionary of bones. Key is bone name.",
+                        additionalProperties: {
+                            type: "OBJECT",
+                            properties: {
+                                pivot: { type: "ARRAY", items: { type: "NUMBER" }, description: "[x,y,z] pivot point" },
+                                rotation: { type: "ARRAY", items: { type: "NUMBER" } },
+                                parent: { type: "STRING", description: "Name of parent bone, or null" }
+                            }
+                        }
+                    },
+                    actions: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                action: { type: "STRING", description: "'add', 'remove', 'update'" },
+                                id: { type: "STRING" }, name: { type: "STRING" }, bone: { type: "STRING", description: "Must match a bone key" },
+                                x: { type: "NUMBER" }, y: { type: "NUMBER" }, z: { type: "NUMBER" },
+                                w: { type: "NUMBER" }, h: { type: "NUMBER" }, d: { type: "NUMBER" },
+                                rx: { type: "NUMBER" }, ry: { type: "NUMBER" }, rz: { type: "NUMBER" },
+                                color: { type: "STRING" }
+                            },
+                            required: ["action", "id", "bone", "x", "y", "z", "w", "h", "d", "color"]
+                        }
+                    },
+                    animations: {
+                        type: "ARRAY",
+                        description: "List of generated animations",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                name: { type: "STRING" }, loop: { type: "STRING", description: "'loop', 'hold', or 'once'" }, length: { type: "NUMBER" },
+                                anim_bones: {
+                                    type: "OBJECT",
+                                    description: "Keys are bone names. Values contain rotation keyframes.",
+                                    additionalProperties: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            rotation: {
+                                                type: "OBJECT",
+                                                description: "Keys are time strings (e.g. '0.0', '0.5'). Values are [x,y,z] arrays.",
+                                                additionalProperties: { type: "ARRAY", items: { type: "NUMBER" } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                required: ["texture_size", "bones", "actions"]
+            };
+
+            const payloadParts = [
+                { text: `Prompt: ${originalPrompt}\nCurrent Blocks:\n${JSON.stringify(currentBlocks)}` },
+                { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
+            ];
+            if (uploadedImageBase64) {
+                payloadParts.push({ text: "Reference Image provided by user:" });
+                payloadParts.push({ inlineData: { mimeType: "image/jpeg", data: uploadedImageBase64 } });
+            }
+
+            const payload = {
+                contents: [{ role: "user", parts: payloadParts }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
+            };
+
+            const urlModelName = selectedModelString.replace('models/', '');
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${urlModelName}:generateContent?key=${apiKey}`;
+            
+            const response = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!rawText) throw new Error("API failed to return JSON.");
+            
+            const result = JSON.parse(rawText);
+            
+            if (result.actions.length === 0 && (!result.animations || result.animations.length === 0)) {
+                return { type: 'complete' };
+            }
+            return { type: 'needs_approval', data: result };
         }
+
+        function populateReviewModal(data) {
+            const blocksList = document.getElementById('review-blocks-list');
+            const bonesList = document.getElementById('review-bones-list');
+            const animsList = document.getElementById('review-anims-list');
+            
+            blocksList.innerHTML = '';
+            bonesList.innerHTML = '';
+            animsList.innerHTML = '';
+
+            // Actions
+            let actionHtml = '';
+            data.actions.forEach(a => {
+                let color = a.action === 'add' ? 'text-green-400' : a.action === 'remove' ? 'text-red-400' : 'text-yellow-400';
+                actionHtml += `<li><span class="${color}">[${a.action.toUpperCase()}]</span> ${a.name || a.id} -> <span class="text-gray-500">Bone: ${a.bone}</span></li>`;
+            });
+            blocksList.innerHTML = actionHtml || '<li>No geometry changes.</li>';
+
+            // Bones
+            let boneHtml = '';
+            if(data.bones) {
+                Object.keys(data.bones).forEach(bName => {
+                    let parent = data.bones[bName].parent || 'root';
+                    boneHtml += `<li><span class="text-purple-400">${bName}</span> <span class="text-gray-500">(Parent: ${parent})</span></li>`;
+                });
+            }
+            bonesList.innerHTML = boneHtml || '<li>No bones defined.</li>';
+
+            // Animations
+            let animHtml = '';
+            if(data.animations && data.animations.length > 0) {
+                data.animations.forEach(an => {
+                    let bCount = Object.keys(an.anim_bones || {}).length;
+                    animHtml += `<li><span class="text-green-400">${an.name}</span> <span class="text-gray-500">(${an.length}s, ${an.loop}, ${bCount} bones animated)</span></li>`;
+                });
+            }
+            animsList.innerHTML = animHtml || '<li>No new animations generated.</li>';
+        }
+
+        async function applyStateRealtime(data) {
+            if(data.texture_size) atlasW = atlasH = data.texture_size;
+            if(data.bones) aiBones = { ...aiBones, ...data.bones };
+            
+            // Overwrite animations completely for simplicity, or append if desired. 
+            // We will replace to avoid duplicates with same names.
+            if(data.animations && data.animations.length > 0) {
+                aiAnimations = data.animations; 
+            }
+
+            for (const cmd of data.actions) {
+                cmd.rx = cmd.rx || 0; cmd.ry = cmd.ry || 0; cmd.rz = cmd.rz || 0;
+                
+                if (cmd.action === 'add' || cmd.action === 'update') {
+                    aiBlocks[cmd.id] = { data: cmd, meshGroup: null };
+                } else if (cmd.action === 'remove') {
+                    delete aiBlocks[cmd.id];
+                }
+            }
+
+            rebuildThreeScene();
+        }
+
+        function rebuildThreeScene() {
+            // 1. Clear existing meshes
+            while(scene.children.length > 0){ 
+                const child = scene.children[0];
+                if(child.type === "Group" && child.userData.isAIBone) scene.remove(child);
+                else if(child.type === "Mesh" && child.userData.isAIGeo) scene.remove(child);
+                else break; // Break if we hit lighting/grid (assuming they were added first, actually let's just clear specific meshes)
+            }
+            // Better clear:
+            scene.children.forEach(c => {
+                if(c.userData.isAIBone || c.userData.isAIGeo) scene.remove(c);
+            });
+
+            // 2. We don't necessarily need to render the bone hierarchy perfectly in ThreeJS just for preview.
+            // Rendering flat meshes at their absolute positions is safer for the preview. The hierarchy is for export.
+            Object.values(aiBlocks).forEach(bObj => {
+                const b = bObj.data;
+                const geometry = new THREE.BoxGeometry(b.w, b.h, b.d);
+                const material = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.8 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.userData.isAIGeo = true;
+
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x000, opacity: 0.3, transparent: true }));
+                mesh.add(edges);
+
+                // For basic preview, just put the cube where the LLM said it belongs.
+                mesh.position.set(b.x, b.y, b.z);
+                
+                // If it has specific cube rotation (rare), apply it. 
+                // We ignore bone rotation in the static preview to prevent complex matrix math issues here.
+                mesh.rotation.order = "ZYX";
+                mesh.rotation.set(b.rx * (Math.PI/180), b.ry * (Math.PI/180), b.rz * (Math.PI/180));
+                
+                mesh.castShadow = true; mesh.receiveShadow = true;
+                scene.add(mesh);
+                bObj.meshGroup = mesh;
+            });
+
+            updateCounters();
+        }
+
+        function buildAtlas() {
+            const canvas = document.getElementById('texture-canvas');
+            const ctx = canvas.getContext('2d');
+            let texW = atlasW, texH = atlasH, currentX = 0, currentY = 0, rowH = 0;
+            
+            let blockArray = Object.values(aiBlocks);
+            blockArray.sort((a, b) => (b.data.w * b.data.h * b.data.d) - (a.data.w * a.data.h * a.data.d));
+
+            blockArray.forEach(bObj => {
+                const b = bObj.data;
+                let bw = Math.max(1, Math.ceil(b.w)), bh = Math.max(1, Math.ceil(b.h)), bd = Math.max(1, Math.ceil(b.d));
+                let uvW = (bd * 2) + (bw * 2), uvH = bd + bh;
+
+                if (currentX + uvW > texW) { currentX = 0; currentY += rowH; rowH = 0; }
+                if (currentY + uvH > texH) { texH = Math.max(256, texH * 2); if (texW < texH) texW = texH; }
+
+                b.uv_x = currentX; b.uv_y = currentY; b.uv_w = uvW; b.uv_h = uvH;
+                currentX += uvW; rowH = Math.max(rowH, uvH);
+            });
+
+            canvas.width = texW; canvas.height = texH;
+            ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0, 0, texW, texH);
+
+            blockArray.forEach(bObj => {
+                const b = bObj.data;
+                ctx.fillStyle = b.color || '#ffffff'; ctx.fillRect(b.uv_x, b.uv_y, b.uv_w, b.uv_h);
+                // Procedural detail
+                for(let i=0; i<b.uv_w; i++) {
+                    for(let j=0; j<b.uv_h; j++) {
+                        if(i===0||j===0||i===b.uv_w-1||j===b.uv_h-1) { ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fillRect(b.uv_x+i, b.uv_y+j, 1, 1); }
+                        else if(Math.random()>0.8) { ctx.fillStyle=Math.random()>0.5?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)'; ctx.fillRect(b.uv_x+i, b.uv_y+j, 1, 1); }
+                    }
+                }
+            });
+            atlasBase64 = canvas.toDataURL('image/png');
+        }
+
+        function exportBBModel() {
+            if (Object.keys(aiBlocks).length === 0) return alert("Nothing to export.");
+            buildAtlas();
+
+            // 1. Compile Elements (Cubes)
+            const elements = Object.values(aiBlocks).map(bObj => {
+                const b = bObj.data;
+                const originX = b.x - (b.w / 2);
+                const originY = b.y - (b.h / 2);
+                const originZ = b.z - (b.d / 2);
+                
+                // Construct standard 6 faces mapped to the box UV
+                const faces = {};
+                const dirs = ['north', 'east', 'south', 'west', 'up', 'down'];
+                dirs.forEach(d => faces[d] = { uv: [b.uv_x, b.uv_y, b.uv_w, b.uv_h], texture: 0 });
+
+                return {
+                    name: b.name,
+                    uuid: b.id,
+                    from: [originX, originY, originZ],
+                    to: [originX + b.w, originY + b.h, originZ + b.d],
+                    rotation: [b.rx, b.ry, b.rz],
+                    origin: [b.x, b.y, b.z], // cube's own center
+                    faces: faces
+                };
+            });
+
+            // 2. Compile Outliner (Bones Hierarchy)
+            const boneUuids = {};
+            Object.keys(aiBones).forEach(name => boneUuids[name] = generateUUID());
+
+            const outlinerMap = {};
+            // Init outliner objects
+            Object.keys(aiBones).forEach(name => {
+                const bd = aiBones[name];
+                outlinerMap[name] = {
+                    name: name,
+                    uuid: boneUuids[name],
+                    origin: bd.pivot || [0,0,0],
+                    rotation: bd.rotation || [0,0,0],
+                    children: []
+                };
+            });
+
+            // Assign cubes to bones
+            Object.values(aiBlocks).forEach(bObj => {
+                const b = bObj.data;
+                if(b.bone && outlinerMap[b.bone]) {
+                    outlinerMap[b.bone].children.push(b.id);
+                } else {
+                    // Fallback to a root bone if unassigned
+                    if(!outlinerMap["root"]) outlinerMap["root"] = { name: "root", uuid: generateUUID(), origin: [0,0,0], rotation: [0,0,0], children: [] };
+                    outlinerMap["root"].children.push(b.id);
+                }
+            });
+
+            // Nest bones based on parent
+            const outliner = [];
+            Object.keys(outlinerMap).forEach(name => {
+                const parent = aiBones[name]?.parent;
+                if(parent && outlinerMap[parent]) {
+                    outlinerMap[parent].children.push(outlinerMap[name]);
+                } else {
+                    outliner.push(outlinerMap[name]);
+                }
+            });
+
+            // 3. Compile Animations
+            const bbAnimations = aiAnimations.map(anim => {
+                const animators = {};
+                if(anim.anim_bones) {
+                    Object.keys(anim.anim_bones).forEach(bName => {
+                        const rotData = anim.anim_bones[bName].rotation;
+                        if(rotData) {
+                            const keyframes = [];
+                            Object.keys(rotData).forEach(timeStr => {
+                                keyframes.push({
+                                    channel: "rotation",
+                                    time: parseFloat(timeStr),
+                                    data_points: [{ x: rotData[timeStr][0], y: rotData[timeStr][1], z: rotData[timeStr][2] }]
+                                });
+                            });
+                            animators[boneUuids[bName] || generateUUID()] = { name: bName, keyframes: keyframes };
+                        }
+                    });
+                }
+
+                return {
+                    uuid: generateUUID(),
+                    name: `animation.model.${anim.name}`,
+                    loop: anim.loop === 'loop' ? 'loop' : 'once',
+                    length: anim.length || 1.0,
+                    animators: animators
+                };
+            });
+
+            // 4. Final BBModel JSON
+            const bbmodel = {
+                meta: { format_version: "4.0", model_format: "free", box_uv: true },
+                name: "AI_Generated_Entity",
+                resolution: { width: atlasW, height: atlasH },
+                elements: elements,
+                outliner: outliner,
+                textures: [{
+                    id: "0", name: "atlas", folder: "block",
+                    source: atlasBase64 // Embed base64 directly
+                }],
+                animations: bbAnimations
+            };
+
+            // Trigger Download
+            const jsonStr = JSON.stringify(bbmodel);
+            const dataUri = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
+            const a = document.createElement('a');
+            a.href = dataUri; a.download = "ai_entity.bbmodel";
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
     </script>
 </body>
 </html>
